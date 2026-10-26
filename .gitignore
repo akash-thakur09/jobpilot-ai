@@ -1,0 +1,52 @@
+# Environments & Virtual Envs
+.venv/
+venv/
+ENV/
+env/
+__pypackages__/
+
+# Python Caches & Build
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Node & Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+.npm
+*.tsbuildinfo
+
+# Sensitive Files & Env
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Application Storage & Artifacts (PDFs, Generated resumes, Screenshots)
+storage/resumes/*.pdf
+storage/screenshots/
+!storage/resumes/.gitkeep
+!storage/screenshots/.gitkeep
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker volumes / local db files
+*.sqlite3
+*.db
+pgdata/
