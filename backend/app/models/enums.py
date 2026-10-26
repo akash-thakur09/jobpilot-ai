@@ -1,0 +1,59 @@
+import enum
+
+
+class RemoteType(str, enum.Enum):
+    REMOTE = "REMOTE"
+    HYBRID = "HYBRID"
+    ON_SITE = "ON_SITE"
+    UNKNOWN = "UNKNOWN"
+
+
+class JobStatus(str, enum.Enum):
+    DISCOVERED = "DISCOVERED"
+    INGESTED = "INGESTED"
+    ARCHIVED = "ARCHIVED"
+    EXPIRED = "EXPIRED"
+
+
+class RequirementType(str, enum.Enum):
+    MANDATORY_SKILL = "MANDATORY_SKILL"
+    PREFERRED_SKILL = "PREFERRED_SKILL"
+    EXPERIENCE_YEARS = "EXPERIENCE_YEARS"
+    EDUCATION = "EDUCATION"
+    LOCATION = "LOCATION"
+    WORK_AUTH = "WORK_AUTH"
+
+
+class ApplicationStatus(str, enum.Enum):
+    DISCOVERED = "DISCOVERED"
+    SCORED = "SCORED"
+    RESUME_GENERATED = "RESUME_GENERATED"
+    READY_FOR_REVIEW = "READY_FOR_REVIEW"
+    APPROVED = "APPROVED"
+    SUBMISSION_PENDING = "SUBMISSION_PENDING"
+    SUBMITTED = "SUBMITTED"
+    SHORTLISTED = "SHORTLISTED"
+    INTERVIEW_SCHEDULED = "INTERVIEW_SCHEDULED"
+    REJECTED = "REJECTED"
+    WITHDRAWN = "WITHDRAWN"
+    FAILED = "FAILED"
+    NEEDS_HUMAN_ACTION = "NEEDS_HUMAN_ACTION"
+
+
+class AutomationRunStatus(str, enum.Enum):
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+class NotificationChannel(str, enum.Enum):
+    IN_APP = "IN_APP"
+    TELEGRAM = "TELEGRAM"
+    EMAIL = "EMAIL"
+
+
+class NotificationStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    DELIVERED = "DELIVERED"
+    FAILED = "FAILED"

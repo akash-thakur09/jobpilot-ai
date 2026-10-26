@@ -17,18 +17,18 @@
 - [x] Storage directories setup with `.gitkeep` (`storage/resumes`, `storage/screenshots`)
 
 ### Phase 1 — Environment and Backend Foundation
-- [ ] Backend package directory structure (`backend/app/...`)
-- [ ] Dependency specification (`backend/pyproject.toml` or `requirements.txt`)
-- [ ] Application configuration (`backend/app/core/config.py`)
-- [ ] Structured logging and error handling
-- [ ] Async Database engine & session management (`backend/app/db/session.py`)
-- [ ] Core SQLAlchemy declarative models (Candidate, Job, Match, Resume, Application)
-- [ ] Alembic setup and initial migration
-- [ ] FastAPI application factory with versioned `/api/v1` routers
-- [ ] Health and readiness endpoints (`/health`, `/api/v1/health`)
-- [ ] Pytest harness and baseline test suite
-- [ ] Docker Compose definition (`docker-compose.yml`)
-- [ ] Backend verification test execution
+- [x] Backend package directory structure (`backend/app/...`)
+- [x] Dependency specification (`backend/requirements.txt`)
+- [x] Application configuration (`backend/app/core/config.py`)
+- [x] Structured logging and error handling (`backend/app/core/logging.py`)
+- [x] Async Database engine & session management (`backend/app/db/session.py`)
+- [x] Core SQLAlchemy declarative models (`CandidateProfile`, `Job`, `MatchScore`, `ResumeVersion`, `Application`, etc.)
+- [x] Alembic setup and initial migration (`2051ba9838c8_initial_schema.py`)
+- [x] FastAPI application factory with versioned `/api/v1` routers (`backend/app/main.py`)
+- [x] Health and readiness endpoints (`/health`, `/api/v1/health`, `/api/v1/health/ready`)
+- [x] Pytest harness and baseline test suite (`backend/tests/test_health.py`, `test_models.py`)
+- [x] Docker Compose definition (`docker-compose.yml`)
+- [x] Backend verification test execution (4 passing unit & integration tests)
 
 ### Phase 2 — Candidate Profile and Job Discovery
 - [ ] Candidate profile CRUD and validation schemas
