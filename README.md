@@ -82,6 +82,13 @@ The frontend will be available at `http://localhost:5173` and the backend API do
 - `GET /api/v1/matching/results/{job_id}` — Get latest match score and breakdown for a job
 - `GET /api/v1/matching/health` — Check matching engine and Ollama AI provider status
 
+### Resume Tailoring & Versioning (Phase 4)
+- `POST /api/v1/resumes/generate` — Generate tailored ATS PDF resume for an eligible job (fact validation gate, atomic SHA-256 storage)
+- `GET /api/v1/resumes/{version_id}` — Get resume version metadata, validation reports, keyword coverage, and candidate snapshot
+- `GET /api/v1/resumes/job/{job_id}` — List all historical generated resume versions for a specific job
+- `GET /api/v1/resumes/{version_id}/download` — Stream exact immutable PDF file with cache headers and filename
+- `GET /api/v1/resumes/{version_id}/integrity` — Verify stored file presence and SHA-256 integrity match on disk
+
 ---
 
 ## Documentation

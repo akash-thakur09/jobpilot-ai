@@ -49,13 +49,15 @@
 - [x] Unit and integration tests (33 passing tests covering positive matches, borderline matches, disqualified constraints, prompt injection resilience, and Ollama offline fallback)
 
 ### Phase 4 — Resume Generation and Versioning
-- [ ] Structured resume schema (truthful tailoring without hallucination)
-- [ ] Factual consistency validator (rejects claims not in candidate profile)
-- [ ] ATS-friendly PDF generator (clean typography, parseable text)
-- [ ] PDF text extraction validator (ensures text is selectable and accurately rendered)
-- [ ] SHA-256 checksum computation and atomic disk persistence
-- [ ] Immutable ResumeVersion database records
-- [ ] Unit tests proving profile updates do not alter historical resume records
+- [x] Structured resume schema (truthful tailoring without hallucination) (`backend/app/resumes/schemas.py`)
+- [x] Factual consistency validator (rejects claims not in candidate profile) (`backend/app/resumes/fact_validator.py`)
+- [x] ATS-friendly PDF generator (single-column, clean typography, parseable text) (`backend/app/resumes/pdf_renderer.py`)
+- [x] PDF text extraction validator (pypdf text extraction and section verification) (`backend/app/resumes/pdf_verifier.py`)
+- [x] SHA-256 checksum computation and atomic disk persistence (`backend/app/resumes/storage_service.py`)
+- [x] Immutable ResumeVersion database records (`backend/app/models/matching.py`, `backend/app/services/resume_version_service.py`)
+- [x] Unit tests proving profile updates do not alter historical resume records (`backend/tests/test_resume_tailoring.py`)
+- [x] Resume generation, download, and file integrity verification API endpoints (`backend/app/api/v1/resumes.py`)
+- [x] Clean Alembic migration: `2692bda4ba04_add_resume_versioning_validation_fields.py`
 
 ### Phase 5 — Application Workflow
 - [ ] Application state machine with strict state transition validation
