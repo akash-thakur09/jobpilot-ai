@@ -75,6 +75,13 @@ The frontend will be available at `http://localhost:5173` and the backend API do
 - `GET /api/v1/jobs/sources` — List registered discovery sources and their health
 - `POST /api/v1/jobs/discover` — Trigger job discovery for `synthetic`, `greenhouse`, or `lever`
 
+### Job Matching & Scoring
+- `POST /api/v1/matching/evaluate/{job_id}` — Evaluate a single job against the candidate profile
+- `POST /api/v1/matching/evaluate-all` — Batch-evaluate all discovered jobs
+- `GET /api/v1/matching/results` — List match evaluations (with `is_eligible`, `min_score`, pagination)
+- `GET /api/v1/matching/results/{job_id}` — Get latest match score and breakdown for a job
+- `GET /api/v1/matching/health` — Check matching engine and Ollama AI provider status
+
 ---
 
 ## Documentation

@@ -24,6 +24,12 @@ class RequirementType(str, enum.Enum):
     WORK_AUTH = "WORK_AUTH"
 
 
+class EligibilityStatus(str, enum.Enum):
+    ELIGIBLE = "ELIGIBLE"
+    DISQUALIFIED = "DISQUALIFIED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
 class ApplicationStatus(str, enum.Enum):
     DISCOVERED = "DISCOVERED"
     SCORED = "SCORED"

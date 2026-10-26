@@ -40,11 +40,13 @@
 - [x] Unit and integration tests (20 passing tests across candidate profile, resume import, discovery, deduplication, and adapter fixtures)
 
 ### Phase 3 — Matching Engine
-- [ ] Deterministic eligibility filter rules (mandatory skills, location, work auth)
-- [ ] Configurable weighted scoring engine (skills, title, experience, salary)
-- [ ] Semantic matching adapter interface (with Ollama `llama3.1` integration)
-- [ ] Explainable match breakdown generator
-- [ ] Unit tests for positive matches, borderline matches, and disqualified listings
+- [x] Deterministic eligibility filter rules (`backend/app/matching/eligibility.py`: work auth, location/remote, experience, mandatory skills)
+- [x] Configurable weighted scoring engine (`backend/app/matching/scoring.py`: 40% skills, 20% title, 15% experience, 10% projects, 10% location/remote, 5% salary)
+- [x] Skill alias normalization & distinct technology separation (`backend/app/matching/skill_registry.py`)
+- [x] Semantic matching adapter interface with local Ollama provider (`backend/app/providers/ollama.py` with prompt injection defense)
+- [x] Explainable match breakdown generator & persistence (`backend/app/services/matching_service.py`, `backend/app/api/v1/matching.py`)
+- [x] Schema migration for audit fields (`667e479abab5_add_matching_engine_fields_to_match_.py`)
+- [x] Unit and integration tests (33 passing tests covering positive matches, borderline matches, disqualified constraints, prompt injection resilience, and Ollama offline fallback)
 
 ### Phase 4 — Resume Generation and Versioning
 - [ ] Structured resume schema (truthful tailoring without hallucination)
