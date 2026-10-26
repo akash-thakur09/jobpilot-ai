@@ -87,6 +87,37 @@ class ResumeFactValidator:
                 else:
                     supported_count += 1
 
+                # Bullet points & numerical metrics verification
+                metric_pattern = re.compile(r'\b(?:\$\d+[\d,]*(?:\.\d+)?|\d+(?:\.\d+)?%|\d+x|\d{2,}\+?)\b', re.IGNORECASE)
+                verified_bullets_text = " ".join(matched_exp.verified_bullets or [])
+                verified_metrics = {m.lower() for m in metric_pattern.findall(verified_bullets_text)}
+                verified_bullet_skills = {
+                    SkillRegistry.normalize_skill(s)
+                    for s in SkillRegistry.extract_skills_from_text(verified_bullets_text)
+                }
+                allowed_bullet_skills = verified_skills_set.union(verified_bullet_skills)
+
+                for bullet in exp.bullet_points:
+                    # Check for fabricated metrics
+                    claimed_metrics = {m.lower() for m in metric_pattern.findall(bullet)}
+                    fabricated_metrics = claimed_metrics - verified_metrics
+                    if fabricated_metrics:
+                        for m in sorted(list(fabricated_metrics)):
+                            unsupported_claims.append(
+                                f"Fabricated metric '{m}' in achievement for {exp.company}: '{bullet}'"
+                            )
+                    else:
+                        supported_count += 1
+
+                    # Check for unverified skills inside bullet
+                    bullet_skills = SkillRegistry.extract_skills_from_text(bullet)
+                    for bs in bullet_skills:
+                        norm_bs = SkillRegistry.normalize_skill(bs)
+                        if norm_bs not in allowed_bullet_skills:
+                            unsupported_claims.append(
+                                f"Unverified skill '{bs}' claimed in achievement for {exp.company}: '{bullet}'"
+                            )
+
         # 4. Education Check
         verified_educations = candidate.educations or []
         verified_institutions = {
@@ -133,6 +164,35 @@ class ResumeFactValidator:
                         )
                     else:
                         supported_count += 1
+
+                # Check project bullet points & metrics
+                metric_pattern = re.compile(r'\b(?:\$\d+[\d,]*(?:\.\d+)?|\d+(?:\.\d+)?%|\d+x|\d{2,}\+?)\b', re.IGNORECASE)
+                verified_proj_text = f"{matched_proj.description} " + " ".join(matched_proj.verified_bullets or [])
+                verified_proj_metrics = {m.lower() for m in metric_pattern.findall(verified_proj_text)}
+                verified_proj_bullet_skills = {
+                    SkillRegistry.normalize_skill(s)
+                    for s in SkillRegistry.extract_skills_from_text(verified_proj_text)
+                }
+                allowed_proj_bullet_skills = verified_skills_set.union(verified_proj_bullet_skills)
+
+                for bullet in proj.bullet_points:
+                    claimed_metrics = {m.lower() for m in metric_pattern.findall(bullet)}
+                    fabricated_metrics = claimed_metrics - verified_proj_metrics
+                    if fabricated_metrics:
+                        for m in sorted(list(fabricated_metrics)):
+                            unsupported_claims.append(
+                                f"Fabricated metric '{m}' in project '{proj.title}': '{bullet}'"
+                            )
+                    else:
+                        supported_count += 1
+
+                    bullet_skills = SkillRegistry.extract_skills_from_text(bullet)
+                    for bs in bullet_skills:
+                        norm_bs = SkillRegistry.normalize_skill(bs)
+                        if norm_bs not in allowed_proj_bullet_skills:
+                            unsupported_claims.append(
+                                f"Unverified skill '{bs}' claimed in project '{proj.title}': '{bullet}'"
+                            )
 
         is_valid = len(unsupported_claims) == 0
 

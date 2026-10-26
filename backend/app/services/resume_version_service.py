@@ -112,7 +112,7 @@ class ResumeVersionService:
         fact_report = ResumeFactValidator.validate_content(candidate, tailored_content)
         if not fact_report.is_valid:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={
                     "message": "Factual validation failed. Unsupported claims detected.",
                     "unsupported_claims": fact_report.unsupported_claims,
