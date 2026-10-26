@@ -34,8 +34,10 @@ frontend/.vite/
 
 # Application Storage & Artifacts (PDFs, Generated resumes, Screenshots)
 storage/resumes/*.pdf
+storage/master_resumes/*.pdf
 storage/screenshots/
 !storage/resumes/.gitkeep
+!storage/master_resumes/.gitkeep
 !storage/screenshots/.gitkeep
 
 # IDE & OS
