@@ -31,13 +31,13 @@
 - [x] Backend verification test execution (4 passing unit & integration tests)
 
 ### Phase 2 — Candidate Profile and Job Discovery
-- [ ] Candidate profile CRUD and validation schemas
-- [ ] Master resume extraction and confirmation logic
-- [ ] Job source adapter interface (`BaseJobSourceAdapter`)
-- [ ] Synthetic / Greenhouse / Lever job collectors
-- [ ] Job normalization, persistence, and deduplication logic
-- [ ] Scheduled discovery runner with concurrency controls
-- [ ] Unit and integration tests for discovery & deduplication
+- [x] Candidate profile CRUD and validation schemas (`backend/app/schemas/candidate.py`, `backend/app/api/v1/profile.py`)
+- [x] Master resume extraction and confirmation logic (`backend/app/services/resume_parser.py`, handling encrypted/empty/corrupt files)
+- [x] Job source adapter interface (`backend/app/collectors/base.py`)
+- [x] Synthetic, Greenhouse, and Lever job collectors (`backend/app/collectors/synthetic.py`, `greenhouse.py`, `lever.py`)
+- [x] Job normalization, persistence, and deduplication logic (`backend/app/services/job_discovery_service.py`)
+- [x] AutomationRun tracking for discovery operations
+- [x] Unit and integration tests (20 passing tests across candidate profile, resume import, discovery, deduplication, and adapter fixtures)
 
 ### Phase 3 — Matching Engine
 - [ ] Deterministic eligibility filter rules (mandatory skills, location, work auth)

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ROOT_DIR: Path = REPO_ROOT
     STORAGE_DIR: Path = REPO_ROOT / "storage"
     RESUME_STORAGE_DIR: Path = REPO_ROOT / "storage" / "resumes"
+    MASTER_RESUME_STORAGE_DIR: Path = REPO_ROOT / "storage" / "master_resumes"
     SCREENSHOT_STORAGE_DIR: Path = REPO_ROOT / "storage" / "screenshots"
 
     # Database
@@ -63,6 +64,7 @@ class Settings(BaseSettings):
         """Ensure necessary storage directories exist on disk."""
         self.STORAGE_DIR.mkdir(parents=True, exist_ok=True)
         self.RESUME_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+        self.MASTER_RESUME_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
         self.SCREENSHOT_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 

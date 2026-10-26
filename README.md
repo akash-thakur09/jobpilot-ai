@@ -55,6 +55,28 @@ The frontend will be available at `http://localhost:5173` and the backend API do
 
 ---
 
+## Core API Endpoints (v1)
+
+### Candidate Profile
+- `GET /api/v1/profile` — Retrieve current verified candidate profile
+- `POST /api/v1/profile` — Create candidate profile
+- `PATCH /api/v1/profile` — Update candidate profile fields
+- `POST /api/v1/profile/skills` — Add verified technical or soft skill
+- `DELETE /api/v1/profile/skills/{skill_id}` — Delete skill
+- `POST /api/v1/profile/experiences` — Add employment history
+- `POST /api/v1/profile/educations` — Add education record
+- `POST /api/v1/profile/projects` — Add demonstrable project
+- `POST /api/v1/profile/import-resume` — Upload & extract master PDF resume into unverified review draft
+- `POST /api/v1/profile/import-resume/confirm` — Confirm and save draft as verified profile
+
+### Job Discovery & Management
+- `GET /api/v1/jobs` — List jobs with search, company/remote filters, and pagination
+- `GET /api/v1/jobs/{job_id}` — Retrieve full job details and requirements
+- `GET /api/v1/jobs/sources` — List registered discovery sources and their health
+- `POST /api/v1/jobs/discover` — Trigger job discovery for `synthetic`, `greenhouse`, or `lever`
+
+---
+
 ## Documentation
 - [Project Specification](docs/PROJECT_SPEC.md)
 - [Development Progress Checklist](docs/DEVELOPMENT_PROGRESS.md)
