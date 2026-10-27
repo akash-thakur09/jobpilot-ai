@@ -1,19 +1,61 @@
 from backend.app.workflow.state_machine import (
     ApplicationStateMachine,
     EventSanitizer,
+)
+from backend.app.workflow.approval_fingerprint import (
+    ApprovalFingerprintService,
+    canonical_json_dumps,
+)
+from backend.app.workflow.exceptions import (
     WorkflowError,
     InvalidStateTransitionError,
     MissingSubmissionEvidenceError,
     InvalidApprovalFingerprintError,
     ApplicationNotFoundError,
+    CandidateNotFoundError,
+    AmbiguousCandidateError,
+    CandidateProfileIncompleteError,
+    JobNotFoundError,
+    JobDisqualifiedError,
+    EligibilityNeedsReviewError,
+    ResumeUnavailableError,
+    ResumeIntegrityError,
+    DuplicateApplicationConflictError,
+    ApplicationNotReviewableError,
+    ApprovalFingerprintMismatchError,
+    StaleApprovalError,
+)
+from backend.app.workflow.schemas import (
+    PreparedFormField,
+    PreparedApplicationFormData,
+    ApplicationReviewPayload,
+    ApplicationApproveRequest,
 )
 
 __all__ = [
     "ApplicationStateMachine",
     "EventSanitizer",
+    "ApprovalFingerprintService",
+    "canonical_json_dumps",
     "WorkflowError",
     "InvalidStateTransitionError",
     "MissingSubmissionEvidenceError",
     "InvalidApprovalFingerprintError",
     "ApplicationNotFoundError",
+    "CandidateNotFoundError",
+    "AmbiguousCandidateError",
+    "CandidateProfileIncompleteError",
+    "JobNotFoundError",
+    "JobDisqualifiedError",
+    "EligibilityNeedsReviewError",
+    "ResumeUnavailableError",
+    "ResumeIntegrityError",
+    "DuplicateApplicationConflictError",
+    "ApplicationNotReviewableError",
+    "ApprovalFingerprintMismatchError",
+    "StaleApprovalError",
+    "PreparedFormField",
+    "PreparedApplicationFormData",
+    "ApplicationReviewPayload",
+    "ApplicationApproveRequest",
 ]

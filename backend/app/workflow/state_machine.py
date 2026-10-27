@@ -11,38 +11,27 @@ from backend.app.core.logging import logger
 
 
 # ===========================================================================
-# Domain Exceptions
+# Domain Exceptions (Re-exported from .exceptions)
 # ===========================================================================
-class WorkflowError(Exception):
-    """Base exception for application workflow errors."""
-    pass
-
-
-class ApplicationNotFoundError(WorkflowError):
-    """Raised when the specified application ID cannot be found."""
-    pass
-
-
-class InvalidStateTransitionError(WorkflowError):
-    """Raised when an invalid status transition is requested."""
-    def __init__(self, from_status: str, to_status: str, reason: Optional[str] = None):
-        self.from_status = from_status
-        self.to_status = to_status
-        self.reason = reason
-        msg = f"Invalid application state transition from '{from_status}' to '{to_status}'."
-        if reason:
-            msg += f" Reason: {reason}"
-        super().__init__(msg)
-
-
-class MissingSubmissionEvidenceError(WorkflowError):
-    """Raised when transitioning to SUBMITTED without verified confirmation evidence."""
-    pass
-
-
-class InvalidApprovalFingerprintError(WorkflowError):
-    """Raised when transitioning to APPROVED without a valid approval fingerprint."""
-    pass
+from backend.app.workflow.exceptions import (
+    WorkflowError,
+    ApplicationNotFoundError,
+    InvalidStateTransitionError,
+    MissingSubmissionEvidenceError,
+    InvalidApprovalFingerprintError,
+    CandidateNotFoundError,
+    AmbiguousCandidateError,
+    CandidateProfileIncompleteError,
+    JobNotFoundError,
+    JobDisqualifiedError,
+    EligibilityNeedsReviewError,
+    ResumeUnavailableError,
+    ResumeIntegrityError,
+    DuplicateApplicationConflictError,
+    ApplicationNotReviewableError,
+    ApprovalFingerprintMismatchError,
+    StaleApprovalError,
+)
 
 
 # ===========================================================================
@@ -443,6 +432,8 @@ class ApplicationStateMachine:
 
         # 5. Build and Sanitize Event Payload
         event_payload = payload.copy() if payload else {}
+        if event_type:
+            event_payload["_event_type"] = event_type
         if confirmation_reference:
             event_payload["confirmation_reference"] = confirmation_reference
         if reconciliation_evidence:

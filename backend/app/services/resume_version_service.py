@@ -32,6 +32,7 @@ class ResumeVersionService:
         cls,
         session: AsyncSession,
         job_id: str,
+        candidate_id: Optional[str] = None,
         use_ai: bool = True,
         force_regenerate: bool = False,
     ) -> ResumeVersion:
@@ -48,8 +49,12 @@ class ResumeVersionService:
                 selectinload(CandidateProfile.educations),
                 selectinload(CandidateProfile.projects),
             )
-            .limit(1)
         )
+        if candidate_id:
+            cand_query = cand_query.where(CandidateProfile.id == candidate_id)
+        else:
+            cand_query = cand_query.limit(1)
+
         cand_res = await session.execute(cand_query)
         candidate = cand_res.scalar_one_or_none()
         if not candidate:
@@ -80,7 +85,9 @@ class ResumeVersionService:
         if not match_score:
             # Run matching evaluation automatically
             matching_service = MatchingService()
-            match_score = await matching_service.evaluate_job(session=session, job_id=job.id, use_ai=False)
+            match_score = await matching_service.evaluate_job(
+                session=session, job_id=job.id, candidate_id=candidate.id, use_ai=False
+            )
 
         # Hard constraint check: Disqualified jobs cannot receive resumes
         if not match_score.is_eligible or match_score.eligibility_status == EligibilityStatus.DISQUALIFIED.value:

@@ -65,8 +65,8 @@
 - [x] Append-only application event history with defensive secret scrubbing (`backend/app/workflow/state_machine.py`)
 - [ ] Browser automation adapter interface (Playwright)
 - [ ] Form field mapping and safe input filler
-- [ ] Human review & approval queue logic
-- [ ] Duplicate application prevention & idempotency controls
+- [x] Human review & approval queue logic with canonical cryptographic fingerprinting (`backend/app/services/application_workflow_service.py`, `backend/app/workflow/approval_fingerprint.py`)
+- [x] Duplicate application prevention & idempotency controls (`backend/app/services/application_workflow_service.py`)
 - [ ] Mock portal test harness for automated submission verification
 
 ### Phase 6 — Frontend Dashboard
