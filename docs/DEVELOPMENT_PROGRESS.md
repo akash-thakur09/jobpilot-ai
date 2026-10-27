@@ -71,15 +71,15 @@
 - [x] Application workflow API endpoints (`/api/v1/applications`) for preparation, review, cryptographic approval, synthetic execution, event/attempt history, and outcome reconciliation (`backend/app/api/v1/applications.py`, `backend/tests/test_applications_api.py`)
 
 ### Phase 6 — Frontend Dashboard
-- [ ] Vite + React + TypeScript setup in `frontend/`
-- [ ] Tailwind CSS configuration and design system
-- [ ] Typed API client for `/api/v1`
-- [ ] Overview dashboard (discovery metrics, pending actions, status breakdown)
-- [ ] Jobs view (filtering, search, match score display, detail modal)
-- [ ] Resume preview and download viewer
-- [ ] Application workflow queue (review, approve, history timeline)
-- [ ] Candidate profile & preferences editor
-- [ ] Source health and scheduler monitor
+- [x] Vite + React + TypeScript setup in `frontend/` (strict checking, Vitest test runner)
+- [x] Tailwind CSS configuration and dark-mode glassmorphic workspace layout
+- [x] Typed API client for `/api/v1` with error normalization, network failure detection, and automatic base URL configuration
+- [x] Dashboard Overview Screen (`DashboardOverview.tsx`): live discovery counts, eligible counts, pending approval counts, unknown outcome alert, and recent activity
+- [x] Jobs Discovery & Matching Screen (`JobsList.tsx`): keyword filtering, remote type filter, deterministic eligibility badges, match scores, evaluation trigger, and application preparation
+- [x] Candidate Profile & Master Resume Screen (`CandidateProfileView.tsx`): verified facts, inline skill management, master PDF parser, and draft-to-verified confirmation workflow
+- [x] Tailored Resume Workspace (`ResumeWorkspace.tsx`): version cards, SHA-256 checksums, bit-for-bit file integrity verification, factual consistency validator, and direct PDF downloads
+- [x] Application Review & Tracking Queue (`ApplicationQueue.tsx`): cryptographic approval with canonical SHA-256 fingerprint, stale approval handling (HTTP 409), synthetic browser run runner, append-only event timeline, attempt history, and guarded outcome reconciliation
+- [x] 21 automated frontend tests across API client, formatters, and all workspace screens using Vitest and React Testing Library
 
 ### Phase 7 — Notifications and Reliability
 - [ ] Local in-app notification store and API
