@@ -93,3 +93,98 @@ async def test_database_models_and_relationships(db_session: AsyncSession):
     assert fetched_app.status == ApplicationStatus.READY_FOR_REVIEW.value
     assert fetched_app.resume_version_id == resume.id
     assert fetched_app.job_id == job.id
+
+
+@pytest.mark.asyncio
+async def test_application_uniqueness_constraint_and_submission_attempts(db_session: AsyncSession):
+    from sqlalchemy.exc import IntegrityError
+    from backend.app.models import SubmissionAttempt, SubmissionOutcome
+
+    # 1. Setup candidate & job
+    candidate = CandidateProfile(
+        full_name="Sarah Connor",
+        email="sarah@example.com",
+        location="Los Angeles, CA",
+        work_authorization="US Citizen",
+        summary="DevOps Engineer",
+    )
+    source = JobSource(identifier="test_src_p5", name="Test Source", base_url="https://example.com")
+    db_session.add_all([candidate, source])
+    await db_session.flush()
+
+    job = Job(
+        source_id=source.id,
+        external_id="ext_999",
+        title="Site Reliability Engineer",
+        company="Cyberdyne",
+        canonical_url="https://cyberdyne.example.com/jobs/999",
+        description="Looking for SRE.",
+    )
+    db_session.add(job)
+    await db_session.flush()
+
+    resume = ResumeVersion(
+        candidate_id=candidate.id,
+        job_id=job.id,
+        structured_content={"summary": "SRE Summary"},
+        candidate_snapshot={"full_name": candidate.full_name},
+        pdf_file_path="storage/resumes/sre.pdf",
+        file_sha256="1111111111111111111111111111111111111111111111111111111111111111",
+        is_ats_valid=True,
+    )
+    db_session.add(resume)
+    await db_session.flush()
+
+    # 2. Create Application with Phase 5 fields
+    app = Application(
+        job_id=job.id,
+        candidate_id=candidate.id,
+        resume_version_id=resume.id,
+        selected_resume_sha256=resume.file_sha256,
+        status=ApplicationStatus.PREPARING.value,
+        approval_fingerprint="abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        approval_metadata={"policy_version": "1.0.0", "approved_by": "user"},
+    )
+    db_session.add(app)
+    await db_session.commit()
+    await db_session.refresh(app)
+
+    assert app.status == ApplicationStatus.PREPARING.value
+    assert app.selected_resume_sha256 == resume.file_sha256
+    assert app.approval_fingerprint is not None
+
+    # 3. Create SubmissionAttempt linked to application
+    attempt = SubmissionAttempt(
+        application_id=app.id,
+        attempt_number=1,
+        adapter_identifier="synthetic_form_adapter",
+        selected_resume_version_id=resume.id,
+        uploaded_artifact_sha256=resume.file_sha256,
+        outcome=SubmissionOutcome.SUCCESS.value,
+        confirmation_reference="CONF-12345",
+        confirmation_payload={"status": "confirmed", "receipt": "rec_001"},
+        sanitized_diagnostics={"http_status": 200, "duration_ms": 420},
+    )
+    db_session.add(attempt)
+    await db_session.commit()
+
+    # Verify attempt retrieval and relation
+    att_res = await db_session.execute(
+        select(SubmissionAttempt).where(SubmissionAttempt.application_id == app.id)
+    )
+    fetched_attempts = att_res.scalars().all()
+    assert len(fetched_attempts) == 1
+    assert fetched_attempts[0].outcome == SubmissionOutcome.SUCCESS.value
+    assert fetched_attempts[0].confirmation_reference == "CONF-12345"
+
+    # 4. Verify Uniqueness Constraint: Duplicate (candidate_id, job_id) must fail
+    dup_app = Application(
+        job_id=job.id,
+        candidate_id=candidate.id,
+        resume_version_id=resume.id,
+        status=ApplicationStatus.READY_FOR_REVIEW.value,
+    )
+    db_session.add(dup_app)
+    with pytest.raises(IntegrityError):
+        await db_session.commit()
+    await db_session.rollback()

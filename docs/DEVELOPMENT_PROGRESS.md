@@ -60,6 +60,7 @@
 - [x] Clean Alembic migration: `2692bda4ba04_add_resume_versioning_validation_fields.py`
 
 ### Phase 5 — Application Workflow
+- [x] Application & SubmissionAttempt data models with uniqueness constraint on `(candidate_id, job_id)`, approval gate fields, and clean Alembic migration (`3f63fd0f4fae`)
 - [ ] Application state machine with strict state transition validation
 - [ ] Append-only application event history
 - [ ] Browser automation adapter interface (Playwright)

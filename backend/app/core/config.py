@@ -44,8 +44,12 @@ class Settings(BaseSettings):
     DISCOVERY_CRON: str = "0 */4 * * *"
     DISCOVERY_CONCURRENCY_LIMIT: int = 3
     REQUIRE_HUMAN_APPROVAL_BEFORE_SUBMISSION: bool = True
+    JOBPILOT_REAL_SUBMISSION_ENABLED: bool = False
     BROWSER_HEADLESS: bool = True
     BROWSER_TIMEOUT_MS: int = 30000
+    BROWSER_NAVIGATION_TIMEOUT_MS: int = 30000
+    MAX_PRE_SUBMISSION_RETRIES: int = 2
+    SCREENSHOT_RETENTION_DAYS: int = 7
 
     # CORS
     CORS_ORIGINS: Union[str, List[str]] = [

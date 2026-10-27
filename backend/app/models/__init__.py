@@ -3,6 +3,7 @@ from backend.app.models.enums import (
     JobStatus,
     RequirementType,
     ApplicationStatus,
+    SubmissionOutcome,
     AutomationRunStatus,
     NotificationChannel,
     NotificationStatus,
@@ -17,7 +18,7 @@ from backend.app.models.candidate import (
 from backend.app.models.job import JobSource, Job, JobRequirement
 from backend.app.models.matching import MatchScore
 from backend.app.models.resume import ResumeVersion
-from backend.app.models.application import Application, ApplicationEvent
+from backend.app.models.application import Application, ApplicationEvent, SubmissionAttempt
 from backend.app.models.automation import AutomationRun
 from backend.app.models.notification import Notification
 
@@ -26,6 +27,7 @@ __all__ = [
     "JobStatus",
     "RequirementType",
     "ApplicationStatus",
+    "SubmissionOutcome",
     "AutomationRunStatus",
     "NotificationChannel",
     "NotificationStatus",
@@ -41,6 +43,7 @@ __all__ = [
     "ResumeVersion",
     "Application",
     "ApplicationEvent",
+    "SubmissionAttempt",
     "AutomationRun",
     "Notification",
 ]
