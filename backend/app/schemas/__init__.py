@@ -12,6 +12,18 @@ from backend.app.schemas.candidate import (
     CandidateProjectRead,
 )
 
+from backend.app.schemas.application import (
+    ApplicationPrepareRequest,
+    ApplicationRead,
+    ApplicationListResponse,
+    ApplicationEventRead,
+    ApplicationEventListResponse,
+    SubmissionAttemptRead,
+    SubmissionAttemptListResponse,
+    ApplicationAttemptRequest,
+    ApplicationReconcileRequest,
+)
+
 __all__ = [
     "CandidateProfileCreate",
     "CandidateProfileUpdate",
@@ -24,4 +36,14 @@ __all__ = [
     "CandidateEducationRead",
     "CandidateProjectCreate",
     "CandidateProjectRead",
+    "ApplicationPrepareRequest",
+    "ApplicationRead",
+    "ApplicationListResponse",
+    "ApplicationEventRead",
+    "ApplicationEventListResponse",
+    "SubmissionAttemptRead",
+    "SubmissionAttemptListResponse",
+    "ApplicationAttemptRequest",
+    "ApplicationReconcileRequest",
 ]
+

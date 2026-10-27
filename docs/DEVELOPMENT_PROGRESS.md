@@ -68,6 +68,7 @@
 - [x] Human review & approval queue logic with canonical cryptographic fingerprinting (`backend/app/services/application_workflow_service.py`, `backend/app/workflow/approval_fingerprint.py`)
 - [x] Duplicate application prevention & idempotency controls (`backend/app/services/application_workflow_service.py`)
 - [x] Mock portal test harness for automated submission verification (`backend/app/automation/mock_portal/server.py`, `backend/tests/test_browser_automation.py`)
+- [x] Application workflow API endpoints (`/api/v1/applications`) for preparation, review, cryptographic approval, synthetic execution, event/attempt history, and outcome reconciliation (`backend/app/api/v1/applications.py`, `backend/tests/test_applications_api.py`)
 
 ### Phase 6 — Frontend Dashboard
 - [ ] Vite + React + TypeScript setup in `frontend/`
