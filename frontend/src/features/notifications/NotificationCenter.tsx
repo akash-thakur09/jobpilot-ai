@@ -8,13 +8,16 @@ import {
   AlertCircle,
   AlertTriangle,
   ShieldAlert,
+  Settings,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { Notification, NotificationType } from '../../types';
 import { formatDate } from '../../lib/formatters';
+import { NotificationSettingsModal } from './NotificationSettingsModal';
 
 export const NotificationCenter: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -147,17 +150,30 @@ export const NotificationCenter: React.FC = () => {
                 </span>
               )}
             </div>
-            {notifications.some((n) => !n.is_read) && (
+            <div className="flex items-center gap-2">
+              {notifications.some((n) => !n.is_read) && (
+                <button
+                  type="button"
+                  onClick={handleMarkAllAsRead}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors mr-1"
+                  title="Mark all as read"
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  <span>Mark all read</span>
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleMarkAllAsRead}
-                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
-                title="Mark all as read"
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsSettingsOpen(true);
+                }}
+                className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                title="Notification & Email Settings"
               >
-                <CheckCheck className="w-3.5 h-3.5" />
-                <span>Mark all read</span>
+                <Settings className="w-4 h-4" />
               </button>
-            )}
+            </div>
           </div>
 
           {/* Body */}
@@ -227,6 +243,12 @@ export const NotificationCenter: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Notification & Email Settings Modal */}
+      <NotificationSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 };

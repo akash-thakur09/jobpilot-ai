@@ -92,8 +92,38 @@ export interface CandidateProfile {
   experiences: CandidateExperience[];
   educations: CandidateEducation[];
   projects: CandidateProject[];
+  search_preferences?: JobSearchPreferences | null;
+  notification_preferences?: NotificationPreferences | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface JobSearchPreferences {
+  target_titles?: string[];
+  role_keywords?: string[];
+  required_skills?: string[];
+  preferred_skills?: string[];
+  preferred_locations?: string[];
+  remote_preference?: 'ANY' | 'REMOTE' | 'HYBRID' | 'ON_SITE';
+  min_years_experience?: number | null;
+  max_years_experience?: number | null;
+  min_salary?: number | null;
+  preferred_companies?: string[];
+  excluded_companies?: string[];
+}
+
+export interface JobSearchPreferencesUpdate {
+  target_titles?: string[];
+  role_keywords?: string[];
+  required_skills?: string[];
+  preferred_skills?: string[];
+  preferred_locations?: string[];
+  remote_preference?: 'ANY' | 'REMOTE' | 'HYBRID' | 'ON_SITE';
+  min_years_experience?: number | null;
+  max_years_experience?: number | null;
+  min_salary?: number | null;
+  preferred_companies?: string[];
+  excluded_companies?: string[];
 }
 
 export interface CandidateProfileUpdate {
@@ -167,6 +197,18 @@ export interface JobSource {
   is_active: boolean;
   rate_limit_per_minute: number;
   last_discovered_at?: string | null;
+  is_enabled?: boolean;
+  source_type?: string;
+  board_identifier?: string;
+  last_run_at?: string | null;
+  last_status?: string | null;
+  last_error_summary?: string | null;
+  jobs_discovered_count?: number;
+}
+
+export interface JobSourceConfigUpdate {
+  is_enabled?: boolean;
+  board_token?: string;
 }
 
 export interface JobDiscoveryResponse {
@@ -442,5 +484,45 @@ export interface NotificationListResponse {
 
 export interface UnreadCountResponse {
   unread_count: number;
+}
+
+export type DeliveryMode = 'IMMEDIATE' | 'DAILY_DIGEST' | 'WEEKLY_DIGEST';
+
+export interface NotificationPreferences {
+  email_enabled: boolean;
+  recipient_email?: string | null;
+  notify_new_matches: boolean;
+  notify_partial_discovery: boolean;
+  notify_discovery_failures: boolean;
+  notify_workflow_blockers: boolean;
+  delivery_mode: DeliveryMode;
+  min_match_score: number;
+}
+
+export interface NotificationPreferencesUpdate {
+  email_enabled?: boolean;
+  recipient_email?: string | null;
+  notify_new_matches?: boolean;
+  notify_partial_discovery?: boolean;
+  notify_discovery_failures?: boolean;
+  notify_workflow_blockers?: boolean;
+  delivery_mode?: DeliveryMode;
+  min_match_score?: number;
+}
+
+export interface EmailConfigStatus {
+  configured: boolean;
+  provider: string;
+  from_address?: string | null;
+  host?: string | null;
+  port?: number | null;
+  use_tls: boolean;
+}
+
+export interface TestEmailResponse {
+  success: boolean;
+  message: string;
+  recipient: string;
+  provider: string;
 }
 

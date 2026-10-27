@@ -142,8 +142,38 @@ class CandidateProfileUpdate(BaseModel):
     portfolio_url: Optional[str] = None
 
 
+class JobSearchPreferences(BaseModel):
+    target_titles: List[str] = Field(default_factory=list, description="Target job titles (e.g. ['Senior Software Engineer', 'Backend Lead'])")
+    role_keywords: List[str] = Field(default_factory=list, description="Keywords to match against job descriptions (e.g. ['FastAPI', 'Distributed Systems'])")
+    required_skills: List[str] = Field(default_factory=list, description="Desired skills candidate wants in target jobs")
+    preferred_skills: List[str] = Field(default_factory=list, description="Bonus skills candidate desires in target jobs")
+    min_experience_years: Optional[float] = Field(None, ge=0.0, le=50.0, description="Minimum years of experience")
+    max_experience_years: Optional[float] = Field(None, ge=0.0, le=50.0, description="Maximum years of experience")
+    preferred_locations: List[str] = Field(default_factory=list, description="Preferred locations/cities")
+    remote_preference: str = Field("REMOTE", max_length=50, description="REMOTE, HYBRID, ON_SITE, or ANY")
+    min_salary: Optional[float] = Field(None, ge=0.0, description="Desired minimum base salary")
+    preferred_companies: List[str] = Field(default_factory=list, description="Companies candidate especially wants to work for")
+    excluded_companies: List[str] = Field(default_factory=list, description="Companies to exclude or de-prioritize")
+
+
+class JobSearchPreferencesUpdate(BaseModel):
+    target_titles: Optional[List[str]] = None
+    role_keywords: Optional[List[str]] = None
+    required_skills: Optional[List[str]] = None
+    preferred_skills: Optional[List[str]] = None
+    min_experience_years: Optional[float] = Field(None, ge=0.0, le=50.0)
+    max_experience_years: Optional[float] = Field(None, ge=0.0, le=50.0)
+    preferred_locations: Optional[List[str]] = None
+    remote_preference: Optional[str] = Field(None, max_length=50)
+    min_salary: Optional[float] = Field(None, ge=0.0)
+    preferred_companies: Optional[List[str]] = None
+    excluded_companies: Optional[List[str]] = None
+
+
 class CandidateProfileRead(CandidateProfileBase):
     id: str
+    search_preferences: dict = Field(default_factory=dict)
+    notification_preferences: dict = Field(default_factory=dict)
     skills: List[CandidateSkillRead] = Field(default_factory=list)
     experiences: List[CandidateExperienceRead] = Field(default_factory=list)
     educations: List[CandidateEducationRead] = Field(default_factory=list)

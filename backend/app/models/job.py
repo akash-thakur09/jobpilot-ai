@@ -17,6 +17,10 @@ class JobSource(Base, TimestampMixin):
     rate_limit_rpm: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_discovered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    config_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    last_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    last_error_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    jobs_discovered_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     jobs: Mapped[List["Job"]] = relationship("Job", back_populates="source", cascade="all, delete-orphan")
 

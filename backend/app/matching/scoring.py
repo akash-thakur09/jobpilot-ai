@@ -46,6 +46,64 @@ class DeterministicScoringService:
         # 6. Salary & Employment Scoring (5%)
         salary_score = cls._score_salary(candidate, job)
 
+        # 7. Evaluate Search Preferences Contributions
+        search_prefs = getattr(candidate, "search_preferences", {}) or {}
+        pref_contributions: Dict[str, Any] = {}
+        pref_explanation_parts = []
+
+        # Role keywords
+        role_keywords = search_prefs.get("role_keywords", [])
+        matched_keywords = []
+        if role_keywords:
+            job_text_lower = f"{job.title} {job.description}".lower()
+            for kw in role_keywords:
+                if kw.lower() in job_text_lower:
+                    matched_keywords.append(kw)
+            pref_contributions["matched_role_keywords"] = matched_keywords
+            if matched_keywords:
+                title_score = min(100.0, title_score + 10.0 * (len(matched_keywords) / len(role_keywords)))
+                pref_explanation_parts.append(f"Matched role keywords: {', '.join(matched_keywords)}")
+
+        # Company preferences
+        preferred_companies = [c.lower() for c in search_prefs.get("preferred_companies", [])]
+        excluded_companies = [c.lower() for c in search_prefs.get("excluded_companies", [])]
+        job_company_lower = job.company.lower()
+
+        if any(exc in job_company_lower for exc in excluded_companies):
+            pref_contributions["is_excluded_company"] = True
+            title_score = max(0.0, title_score - 50.0)
+            pref_explanation_parts.append(f"Company '{job.company}' is in candidate excluded companies list")
+        elif any(pref in job_company_lower for pref in preferred_companies):
+            pref_contributions["matched_preferred_company"] = True
+            title_score = min(100.0, title_score + 15.0)
+            pref_explanation_parts.append(f"Company '{job.company}' is in candidate preferred companies list")
+
+        # Location preferences
+        preferred_locations = [loc.lower() for loc in search_prefs.get("preferred_locations", [])]
+        if preferred_locations:
+            if any(pl in job.location.lower() for pl in preferred_locations):
+                location_score = 100.0
+                pref_contributions["matched_preferred_location"] = True
+                pref_explanation_parts.append(f"Job location '{job.location}' satisfies preferred location")
+            elif job.remote_type == RemoteType.REMOTE.value:
+                pref_contributions["matched_preferred_location"] = True
+                pref_explanation_parts.append("Fully remote job satisfies location preferences")
+
+        # Salary preferences
+        target_min_sal = search_prefs.get("min_salary") or candidate.target_salary_min
+        if target_min_sal:
+            if job.salary_min or job.salary_max:
+                if (job.salary_max and job.salary_max >= target_min_sal) or (job.salary_min and job.salary_min >= target_min_sal):
+                    pref_contributions["salary_satisfies_target"] = True
+                    pref_explanation_parts.append(f"Salary meets minimum requirement of ${target_min_sal:,.0f}")
+                else:
+                    pref_contributions["salary_satisfies_target"] = False
+                    pref_explanation_parts.append(f"Disclosed salary is below target minimum of ${target_min_sal:,.0f}")
+            else:
+                pref_contributions["salary_satisfies_target"] = None  # Undisclosed: do not assume satisfied
+
+        pref_contributions["explanation"] = "; ".join(pref_explanation_parts) if pref_explanation_parts else "Standard evaluation."
+
         # Weighted final score calculation
         raw_final = (
             (skills_score * weights.skills)
@@ -65,6 +123,7 @@ class DeterministicScoringService:
             location_remote_score=round(location_score, 2),
             salary_score=round(salary_score, 2),
             final_score=final_score,
+            preference_contributions=pref_contributions,
         )
 
         return (

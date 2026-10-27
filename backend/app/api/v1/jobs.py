@@ -9,6 +9,7 @@ from backend.app.schemas.job import (
     JobRead,
     JobListResponse,
     JobSourceRead,
+    JobSourceConfigUpdate,
     JobDiscoveryRequest,
     JobDiscoveryResponse,
 )
@@ -60,9 +61,36 @@ async def list_jobs(
 
 @router.get("/sources", response_model=list[JobSourceRead])
 async def list_job_sources(session: AsyncSession = Depends(get_db)):
-    """List all registered job sources and their discovery status."""
-    result = await session.execute(select(JobSource).order_by(JobSource.identifier))
-    return list(result.scalars().all())
+    """List all registered job sources, configuration, and health diagnostics."""
+    return await JobDiscoveryService.get_all_sources(session)
+
+
+@router.get("/sources/{identifier}", response_model=JobSourceRead)
+async def get_job_source(identifier: str, session: AsyncSession = Depends(get_db)):
+    """Retrieve details and health of a specific discovery source."""
+    try:
+        source = await JobDiscoveryService.get_source_by_identifier(session, identifier)
+        if not source:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Job source '{identifier}' not found.")
+        return source
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
+
+
+@router.put("/sources/{identifier}", response_model=JobSourceRead)
+async def update_job_source_config(
+    identifier: str,
+    update_data: JobSourceConfigUpdate,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Configures board identifier and enabled state for a supported job source.
+    Rejects arbitrary URLs and validates identifier format.
+    """
+    try:
+        return await JobDiscoveryService.update_source_config(session, identifier, update_data)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
 
 
 @router.get("/{job_id}", response_model=JobRead)

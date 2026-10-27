@@ -124,3 +124,36 @@
   - Frontend suite: 27 passed tests
 - [x] Operational documentation and startup guides updated in `README.md`
 
+### Phase 9 — Personalized Job Search and Smart Alerts
+- [x] Comprehensive architectural audit verifying candidate profile schemas, matching/eligibility services, source adapters, scheduler, notification models, and frontend client.
+- [x] Search Preferences Model & Schema Evolution:
+  - Added `search_preferences` and `notification_preferences` JSON columns to `CandidateProfile`.
+  - Added `config_json`, `last_status`, `last_error_summary`, and `jobs_discovered_count` to `JobSource`.
+  - Created and applied Alembic revision `5e29f8a31c4d`.
+  - Validated strict separation between search preferences (desired skills, role keywords) and candidate verified profile facts. Desired skills are never treated as candidate facts or injected into resumes.
+  - Enhanced deterministic scoring with explainable preference contributions (target titles, role keywords, preferred companies bonus, excluded companies penalty, remote preference, and non-assumed salary satisfaction).
+  - Preserved hard eligibility safeguards: high preference alignment can never override deterministic disqualification.
+- [x] Job Source Configuration & Health Diagnostics:
+  - Configurable board identifiers for Greenhouse and Lever adapters via API (`GET /api/v1/jobs/sources/{identifier}`, `PUT /api/v1/jobs/sources/{identifier}`).
+  - Strict input validation restricting identifiers to alphanumeric, hyphen, and underscore characters (`^[a-zA-Z0-9_\-]+$`), blocking arbitrary URLs or SSRF vectors.
+  - Granular source health metrics: enabled/disabled state, `last_run_at`, `last_status` (`HEALTHY`, `PARTIAL`, `FAILED`, `IDLE`), `jobs_discovered_count`, and sanitized `last_error_summary`.
+- [x] Optional Email Notifications & Smart Alerts:
+  - Implemented `EmailService` supporting `mock`, `console`, and `smtp` providers with bounded exponential retries.
+  - Disabled by default (`EMAIL_NOTIFICATIONS_ENABLED=False`) with zero secrets stored in the database or exposed via APIs.
+  - Immediate match alerts and configurable digest modes (`IMMEDIATE`, `DAILY_DIGEST`, `WEEKLY_DIGEST`).
+  - Score threshold filtering (`min_match_score`), notifying only for eligible jobs meeting or exceeding candidate threshold.
+  - Cryptographic match deduplication (`email_match:<candidate_id>:<job_id>`) preventing redundant emails across scheduler runs or restarts.
+  - Resilient error handling: provider failures record sanitized diagnostic errors without losing or failing the persistent in-app notification.
+  - Safe test-delivery endpoint (`POST /api/v1/notifications/test-email`) with real provider status reporting.
+- [x] Frontend Integration:
+  - Added `SearchPreferencesCard.tsx` with role keywords, desired skills, experience bounds, remote preferences, salary floor, and company filters.
+  - Added `DiscoverySourcesCard.tsx` in Scheduler management with live source health badges, enabled/disabled toggles, board identifier configuration, and expandable diagnostics.
+  - Added `NotificationSettingsModal.tsx` in Notification Center with email configuration status, threshold slider, delivery mode selector, channel toggles, and safe test email workflow.
+  - Extended typed API client (`api.profile.getPreferences`, `updatePreferences`, `api.jobs.getSource`, `updateSource`, `api.notifications.getPreferences`, `updatePreferences`, `getEmailStatus`, `sendTestEmail`).
+- [x] Full Regression Verification:
+  - Backend suite: 139 passed tests (100% pass rate) across 17 test modules.
+  - Resume version acceptance suite: 7 passed tests.
+  - Frontend Vitest suite: 34 passed tests across 9 test suites.
+  - Clean TypeScript compilation and production Vite build.
+
+

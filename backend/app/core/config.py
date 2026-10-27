@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Optional
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -52,6 +52,17 @@ class Settings(BaseSettings):
     BROWSER_NAVIGATION_TIMEOUT_MS: int = 30000
     MAX_PRE_SUBMISSION_RETRIES: int = 2
     SCREENSHOT_RETENTION_DAYS: int = 7
+
+    # Email Notifications (Optional, disabled by default)
+    EMAIL_NOTIFICATIONS_ENABLED: bool = False
+    EMAIL_PROVIDER: str = "mock"  # "smtp", "mock", "console"
+    EMAIL_HOST: str = "localhost"
+    EMAIL_PORT: int = 587
+    EMAIL_USERNAME: Optional[str] = None
+    EMAIL_PASSWORD: Optional[str] = None
+    EMAIL_USE_TLS: bool = True
+    EMAIL_FROM: str = "alerts@jobpilot.local"
+    EMAIL_TO: Optional[str] = None
 
     # CORS
     CORS_ORIGINS: Union[str, List[str]] = [

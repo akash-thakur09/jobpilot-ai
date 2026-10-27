@@ -4,11 +4,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_db
 from backend.app.services.notification_service import NotificationService
+from backend.app.services.email_service import EmailService
+from backend.app.services.candidate_service import CandidateService
 from backend.app.schemas.notification import (
     NotificationResponse,
     NotificationListResponse,
     UnreadCountResponse,
     MarkReadResponse,
+    NotificationPreferences,
+    NotificationPreferencesUpdate,
+    EmailConfigStatusResponse,
+    TestEmailRequest,
+    TestEmailResponse,
 )
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -105,3 +112,72 @@ async def dismiss_notification(
             detail=f"Notification '{notification_id}' not found.",
         )
     return MarkReadResponse(success=True, notification=_to_response(notification))
+
+
+# ---------------------------------------------------------------------------
+# Notification Preferences & Email Status
+# ---------------------------------------------------------------------------
+@router.get("/preferences", response_model=NotificationPreferences)
+async def get_notification_preferences(session: AsyncSession = Depends(get_db)):
+    """Retrieve candidate notification preferences."""
+    profile = await CandidateService.get_profile(session)
+    if not profile:
+        return NotificationPreferences()
+    prefs = dict(profile.notification_preferences or {})
+    return NotificationPreferences(**prefs)
+
+
+@router.put("/preferences", response_model=NotificationPreferences)
+async def update_notification_preferences(
+    preferences: NotificationPreferencesUpdate, session: AsyncSession = Depends(get_db)
+):
+    """Updates candidate notification preferences."""
+    profile = await CandidateService.get_profile(session)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate profile not found.",
+        )
+    current = dict(profile.notification_preferences or {})
+    current.update(preferences.model_dump(exclude_unset=True))
+    profile.notification_preferences = current
+    await session.commit()
+    await session.refresh(profile)
+    return NotificationPreferences(**profile.notification_preferences)
+
+
+@router.get("/email-status", response_model=EmailConfigStatusResponse)
+async def get_email_status(session: AsyncSession = Depends(get_db)):
+    """Returns email configuration status without exposing credentials."""
+    profile = await CandidateService.get_profile(session)
+    status_info = EmailService.get_email_config_status(profile)
+    return EmailConfigStatusResponse(**status_info)
+
+
+@router.post("/test-email", response_model=TestEmailResponse)
+async def send_test_email(
+    request: TestEmailRequest, session: AsyncSession = Depends(get_db)
+):
+    """Sends a safe test alert email verifying channel operation without contacting employers."""
+    profile = await CandidateService.get_profile(session)
+    recipient = request.recipient or (profile.email if profile else None)
+    if not recipient:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No recipient email address available.",
+        )
+
+    success, message = await EmailService.send_test_email(recipient)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=message,
+        )
+
+    return TestEmailResponse(
+        success=True,
+        message=message,
+        recipient=recipient,
+        provider=EmailService.get_email_config_status(profile)["provider"],
+    )
+

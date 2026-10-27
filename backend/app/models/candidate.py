@@ -24,6 +24,8 @@ class CandidateProfile(Base, TimestampMixin):
     linkedin_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     github_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     portfolio_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    search_preferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    notification_preferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     skills: Mapped[List["CandidateSkill"]] = relationship(
         "CandidateSkill", back_populates="candidate", cascade="all, delete-orphan"

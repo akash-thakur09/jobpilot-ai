@@ -13,6 +13,8 @@ from backend.app.schemas.candidate import (
     CandidateEducationRead,
     CandidateProjectCreate,
     CandidateProjectRead,
+    JobSearchPreferences,
+    JobSearchPreferencesUpdate,
 )
 from backend.app.schemas.resume_import import (
     ResumeImportResult,
@@ -50,6 +52,23 @@ async def update_candidate_profile(
 ):
     """Update profile details."""
     return await CandidateService.update_profile(session, data)
+
+
+# ---------------------------------------------------------------------------
+# Search Preferences endpoints
+# ---------------------------------------------------------------------------
+@router.get("/preferences", response_model=JobSearchPreferences)
+async def get_search_preferences(session: AsyncSession = Depends(get_db)):
+    """Retrieve structured job search preferences."""
+    return await CandidateService.get_search_preferences(session)
+
+
+@router.put("/preferences", response_model=JobSearchPreferences)
+async def update_search_preferences(
+    preferences: JobSearchPreferencesUpdate, session: AsyncSession = Depends(get_db)
+):
+    """Update job search preferences without modifying verified candidate facts."""
+    return await CandidateService.update_search_preferences(session, preferences)
 
 
 # ---------------------------------------------------------------------------

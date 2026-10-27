@@ -15,6 +15,7 @@ from backend.app.models.enums import AutomationRunStatus, JobStatus, Notificatio
 from backend.app.services.job_discovery_service import JobDiscoveryService
 from backend.app.services.matching_service import MatchingService
 from backend.app.services.notification_service import NotificationService
+from backend.app.services.email_service import EmailService
 from backend.app.core.config import settings
 from backend.app.core.logging import logger
 
@@ -112,8 +113,16 @@ class DiscoveryMatchingPipeline:
                         rate_limit=adapter.rate_limit_rpm,
                     )
 
+                    # Check if disabled (if sources list was not explicitly provided, respect is_enabled)
+                    if not source_record.is_enabled and sources is None:
+                        logger.info(f"Source '{src_id}' is disabled in configuration; skipping.")
+                        continue
+
+                    effective_params = dict(source_record.config_json or {})
+                    effective_params.update(source_params.get(src_id, {}))
+
                     # Stage 3: Fetch jobs using adapter
-                    raw_items = await adapter.fetch_jobs(**params)
+                    raw_items = await adapter.fetch_jobs(**effective_params)
                     total_discovered += len(raw_items)
 
                     src_inserted = 0
@@ -181,6 +190,9 @@ class DiscoveryMatchingPipeline:
 
                     # Commit saved batch for this source
                     source_record.last_discovered_at = datetime.now(timezone.utc)
+                    source_record.last_status = "HEALTHY"
+                    source_record.last_error_summary = None
+                    source_record.jobs_discovered_count = (source_record.jobs_discovered_count or 0) + len(raw_items)
                     await session.commit()
 
                     total_inserted += src_inserted
@@ -207,6 +219,18 @@ class DiscoveryMatchingPipeline:
                         "status": "FAILED",
                         "error": sanitized_err,
                     }
+                    try:
+                        err_src = await JobDiscoveryService.get_or_create_source(
+                            session=session,
+                            identifier=src_id,
+                            name=src_id.title(),
+                            base_url="https://jobs.example.com",
+                        )
+                        err_src.last_status = "ERROR"
+                        err_src.last_error_summary = sanitized_err
+                        await session.commit()
+                    except Exception:
+                        await session.rollback()
 
         # Stage 7 to 9: Deterministic eligibility and scoring evaluation for new/updated jobs
         matching_service = MatchingService()
@@ -215,9 +239,12 @@ class DiscoveryMatchingPipeline:
 
         jobs_evaluated = 0
         jobs_eligible = 0
-        new_relevant_matches: List[Job] = []
+        new_relevant_matches: List[Tuple[Job, MatchScore]] = []
 
         if candidate and newly_saved_jobs:
+            candidate_min_threshold = (candidate.notification_preferences or {}).get(
+                "min_match_score", settings.MATCH_NOTIFICATION_THRESHOLD
+            )
             for job in newly_saved_jobs:
                 try:
                     match_record = await matching_service.evaluate_job(
@@ -229,9 +256,9 @@ class DiscoveryMatchingPipeline:
                     jobs_evaluated += 1
                     if match_record.is_eligible:
                         jobs_eligible += 1
-                        # Stage 10: Identify newly relevant matches
-                        if match_record.overall_score >= settings.MATCH_NOTIFICATION_THRESHOLD:
-                            new_relevant_matches.append(job)
+                        # Stage 10: Identify newly relevant matches meeting candidate score threshold
+                        if match_record.overall_score >= candidate_min_threshold:
+                            new_relevant_matches.append((job, match_record))
                 except Exception as match_err:
                     logger.warning(f"Could not evaluate matching for job {job.id}: {match_err}")
         else:
@@ -241,9 +268,9 @@ class DiscoveryMatchingPipeline:
         # Stage 11: Create notifications idempotently
         notifications_created = 0
 
-        # In-app notifications for newly relevant eligible matches
+        # In-app and optional email notifications for newly relevant eligible matches
         if candidate and new_relevant_matches:
-            for rel_job in new_relevant_matches:
+            for rel_job, rel_match in new_relevant_matches:
                 dedup_key = f"match:{candidate.id}:{rel_job.id}"
                 try:
                     notif = await NotificationService.create_notification(
@@ -260,12 +287,26 @@ class DiscoveryMatchingPipeline:
                             "title": rel_job.title,
                             "job_id": rel_job.id,
                             "run_id": run.id,
+                            "score": rel_match.overall_score,
                         },
                     )
                     if notif:
                         notifications_created += 1
                 except Exception as notif_err:
                     logger.warning(f"Failed to create match notification: {notif_err}")
+
+                # Optional email notification (provider failure does not affect in-app notification)
+                try:
+                    email_notif = await EmailService.send_match_notification(
+                        session=session,
+                        candidate=candidate,
+                        job=rel_job,
+                        match_score=rel_match,
+                    )
+                    if email_notif:
+                        notifications_created += 1
+                except Exception as email_err:
+                    logger.warning(f"Email alert dispatch failed gracefully: {email_err}")
 
         # Stage 12: Finalize the run record with status, counts, and diagnostics
         if len(failed_sources) == 0 and len(successful_sources) > 0:

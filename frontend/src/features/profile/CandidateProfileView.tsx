@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ResumeImportModal } from './ResumeImportModal';
+import { SearchPreferencesCard } from './SearchPreferencesCard';
 import {
   User,
   Mail,
@@ -25,6 +26,8 @@ import {
   Trash2,
   RefreshCw,
   Save,
+  SlidersHorizontal,
+  UserCheck,
 } from 'lucide-react';
 
 export const CandidateProfileView: React.FC = () => {
@@ -32,6 +35,7 @@ export const CandidateProfileView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'preferences'>('profile');
 
   // Edit basic fields state
   const [isEditingBasic, setIsEditingBasic] = useState(false);
@@ -213,7 +217,44 @@ export const CandidateProfileView: React.FC = () => {
         </div>
       )}
 
-      {isLoading ? (
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-slate-800 gap-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab('profile')}
+          className={`pb-3 px-1 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+            activeTab === 'profile'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <UserCheck className="w-4 h-4" />
+          <span>Verified Profile Facts</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('preferences')}
+          className={`pb-3 px-1 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+            activeTab === 'preferences'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          <span>Job Search Preferences</span>
+        </button>
+      </div>
+
+      {activeTab === 'preferences' ? (
+        <SearchPreferencesCard
+          initialPreferences={profile?.search_preferences}
+          onPreferencesUpdated={(updated) => {
+            if (profile) {
+              setProfile({ ...profile, search_preferences: updated });
+            }
+          }}
+        />
+      ) : isLoading ? (
         <LoadingSkeleton count={4} />
       ) : error ? (
         <Card className="p-8 text-center text-red-400">

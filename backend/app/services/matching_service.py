@@ -233,6 +233,9 @@ class MatchingService:
         if missing_req:
             parts.append(f"Missing core skills: {', '.join(missing_req)}.")
 
+        if breakdown.preference_contributions and breakdown.preference_contributions.get("explanation"):
+            parts.append(f"Preference Alignment: {breakdown.preference_contributions['explanation']}")
+
         if semantic_summary:
             parts.append(f"AI Interpretation: {semantic_summary}")
 

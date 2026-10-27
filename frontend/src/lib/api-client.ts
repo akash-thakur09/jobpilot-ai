@@ -19,6 +19,9 @@ import {
   JobDiscoveryResponse,
   JobListResponse,
   JobSource,
+  JobSourceConfigUpdate,
+  JobSearchPreferences,
+  JobSearchPreferencesUpdate,
   MatchScore,
   ResumeImportResult,
   ResumeIntegrityCheck,
@@ -32,6 +35,10 @@ import {
   AutomationRunListResponse,
   Notification,
   NotificationListResponse,
+  NotificationPreferences,
+  NotificationPreferencesUpdate,
+  EmailConfigStatus,
+  TestEmailResponse,
   UnreadCountResponse,
 } from '../types';
 
@@ -164,6 +171,13 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ confirmed_profile: confirmedProfile }),
       }),
+    getPreferences: () =>
+      request<JobSearchPreferences>('/api/v1/profile/preferences'),
+    updatePreferences: (prefs: JobSearchPreferencesUpdate) =>
+      request<JobSearchPreferences>('/api/v1/profile/preferences', {
+        method: 'PUT',
+        body: JSON.stringify(prefs),
+      }),
   },
 
   // -------------------------------------------------------------------------
@@ -188,6 +202,13 @@ export const api = {
     },
     get: (jobId: string) => request<Job>(`/api/v1/jobs/${jobId}`),
     listSources: () => request<JobSource[]>('/api/v1/jobs/sources'),
+    getSource: (identifier: string) =>
+      request<JobSource>(`/api/v1/jobs/sources/${identifier}`),
+    updateSource: (identifier: string, data: JobSourceConfigUpdate) =>
+      request<JobSource>(`/api/v1/jobs/sources/${identifier}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
     discover: (
       sourceIdentifier: string,
       params: { board_token?: string; site_token?: string; count?: number } = {}
@@ -420,6 +441,20 @@ export const api = {
         `/api/v1/notifications/${notificationId}/dismiss`,
         { method: 'POST' }
       ),
+    getPreferences: () =>
+      request<NotificationPreferences>('/api/v1/notifications/preferences'),
+    updatePreferences: (prefs: NotificationPreferencesUpdate) =>
+      request<NotificationPreferences>('/api/v1/notifications/preferences', {
+        method: 'PUT',
+        body: JSON.stringify(prefs),
+      }),
+    getEmailStatus: () =>
+      request<EmailConfigStatus>('/api/v1/notifications/email-status'),
+    sendTestEmail: (recipient: string) =>
+      request<TestEmailResponse>('/api/v1/notifications/test-email', {
+        method: 'POST',
+        body: JSON.stringify({ recipient }),
+      }),
   },
 };
 

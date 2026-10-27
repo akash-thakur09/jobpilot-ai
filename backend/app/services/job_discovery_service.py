@@ -3,11 +3,12 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.collectors import get_adapter
+from backend.app.collectors import get_adapter, ADAPTER_REGISTRY
 from backend.app.collectors.base import NormalizedJob
 from backend.app.models.job import Job, JobSource
 from backend.app.models.automation import AutomationRun
 from backend.app.models.enums import AutomationRunStatus, JobStatus
+from backend.app.schemas.job import JobSourceConfigUpdate
 from backend.app.core.logging import logger
 
 
@@ -28,10 +29,69 @@ class JobDiscoveryService:
                 base_url=base_url,
                 rate_limit_rpm=rate_limit,
                 is_enabled=True,
+                config_json={},
+                jobs_discovered_count=0,
             )
             session.add(source)
             await session.commit()
             await session.refresh(source)
+        return source
+
+    @classmethod
+    async def get_all_sources(cls, session: AsyncSession) -> List[JobSource]:
+        """Ensures all supported adapters are registered in DB and returns them."""
+        for ident, adapter_cls in ADAPTER_REGISTRY.items():
+            adapter = adapter_cls()
+            await cls.get_or_create_source(
+                session=session,
+                identifier=adapter.source_identifier,
+                name=adapter.source_name,
+                base_url="https://jobs.example.com",
+                rate_limit=adapter.rate_limit_rpm,
+            )
+        result = await session.execute(select(JobSource).order_by(JobSource.identifier))
+        return list(result.scalars().all())
+
+    @classmethod
+    async def get_source_by_identifier(cls, session: AsyncSession, identifier: str) -> Optional[JobSource]:
+        """Gets a source record by its identifier, creating it if it is a valid adapter."""
+        adapter = get_adapter(identifier)
+        return await cls.get_or_create_source(
+            session=session,
+            identifier=adapter.source_identifier,
+            name=adapter.source_name,
+            base_url="https://jobs.example.com",
+            rate_limit=adapter.rate_limit_rpm,
+        )
+
+    @classmethod
+    async def update_source_config(
+        cls, session: AsyncSession, identifier: str, update_data: JobSourceConfigUpdate
+    ) -> JobSource:
+        """Updates board token, count, and enabled state for a supported source."""
+        adapter = get_adapter(identifier)
+        source = await cls.get_or_create_source(
+            session=session,
+            identifier=adapter.source_identifier,
+            name=adapter.source_name,
+            base_url="https://jobs.example.com",
+            rate_limit=adapter.rate_limit_rpm,
+        )
+
+        current_config = dict(source.config_json or {})
+        if update_data.is_enabled is not None:
+            source.is_enabled = update_data.is_enabled
+
+        if identifier.lower() == "greenhouse" and update_data.board_token is not None:
+            current_config["board_token"] = update_data.board_token.strip()
+        elif identifier.lower() == "lever" and update_data.site_token is not None:
+            current_config["site_token"] = update_data.site_token.strip()
+        elif identifier.lower() == "synthetic" and update_data.count is not None:
+            current_config["count"] = update_data.count
+
+        source.config_json = current_config
+        await session.commit()
+        await session.refresh(source)
         return source
 
     @classmethod

@@ -18,6 +18,8 @@ from backend.app.schemas.candidate import (
     CandidateExperienceCreate,
     CandidateEducationCreate,
     CandidateProjectCreate,
+    JobSearchPreferences,
+    JobSearchPreferencesUpdate,
 )
 
 
@@ -252,3 +254,50 @@ class CandidateService:
             )
         await session.delete(proj)
         await session.commit()
+
+    @classmethod
+    async def get_search_preferences(cls, session: AsyncSession) -> JobSearchPreferences:
+        """Retrieves structured search preferences, falling back to top-level profile fields."""
+        profile = await cls.get_profile(session)
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Candidate profile not found.",
+            )
+        prefs = dict(profile.search_preferences or {})
+        if not prefs.get("target_titles") and profile.target_titles:
+            prefs["target_titles"] = list(profile.target_titles)
+        if not prefs.get("remote_preference") and profile.remote_preference:
+            prefs["remote_preference"] = profile.remote_preference
+        if prefs.get("min_salary") is None and profile.target_salary_min:
+            prefs["min_salary"] = profile.target_salary_min
+        return JobSearchPreferences(**prefs)
+
+    @classmethod
+    async def update_search_preferences(
+        cls, session: AsyncSession, data: JobSearchPreferencesUpdate
+    ) -> JobSearchPreferences:
+        """Updates search preferences while preserving verified candidate facts."""
+        profile = await cls.get_profile(session)
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Candidate profile not found.",
+            )
+        current = dict(profile.search_preferences or {})
+        updates = data.model_dump(exclude_unset=True)
+        current.update(updates)
+
+        # Sync relevant top-level fields for backwards compatibility
+        if "target_titles" in updates and updates["target_titles"] is not None:
+            profile.target_titles = updates["target_titles"]
+        if "remote_preference" in updates and updates["remote_preference"] is not None:
+            profile.remote_preference = updates["remote_preference"]
+        if "min_salary" in updates and updates["min_salary"] is not None:
+            profile.target_salary_min = updates["min_salary"]
+
+        profile.search_preferences = current
+        await session.commit()
+        await session.refresh(profile)
+        return await cls.get_search_preferences(session)
+

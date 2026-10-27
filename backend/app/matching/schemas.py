@@ -57,6 +57,7 @@ class ScoreBreakdown(BaseModel):
     location_remote_score: float = Field(..., ge=0.0, le=100.0)
     salary_score: float = Field(..., ge=0.0, le=100.0)
     final_score: float = Field(..., ge=0.0, le=100.0)
+    preference_contributions: Dict[str, Any] = Field(default_factory=dict)
 
 
 class MatchEvaluationResult(BaseModel):

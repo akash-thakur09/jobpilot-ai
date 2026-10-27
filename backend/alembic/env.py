@@ -24,9 +24,9 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    # Prefer explicit url from Alembic config if provided (e.g. test environments)
+    # Prefer explicit url from Alembic config if provided and not the default placeholder (e.g. test environments)
     custom_url = config.get_main_option("sqlalchemy.url")
-    if custom_url:
+    if custom_url and not custom_url.startswith("driver://"):
         return custom_url
     return settings.DATABASE_SYNC_URL
 

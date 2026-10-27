@@ -16,6 +16,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import { formatDate } from '../../lib/formatters';
+import { DiscoverySourcesCard } from './DiscoverySourcesCard';
 
 export const SchedulerManager: React.FC = () => {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
@@ -317,6 +318,9 @@ export const SchedulerManager: React.FC = () => {
           )}
         </Card>
       </div>
+
+      {/* Discovery Sources & Health Diagnostics */}
+      <DiscoverySourcesCard />
 
       {/* Discovery Run History Table */}
       <Card>
