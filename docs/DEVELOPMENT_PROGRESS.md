@@ -61,8 +61,8 @@
 
 ### Phase 5 — Application Workflow
 - [x] Application & SubmissionAttempt data models with uniqueness constraint on `(candidate_id, job_id)`, approval gate fields, and clean Alembic migration (`3f63fd0f4fae`)
-- [ ] Application state machine with strict state transition validation
-- [ ] Append-only application event history
+- [x] Application state machine with strict state transition validation (`backend/app/workflow/state_machine.py`)
+- [x] Append-only application event history with defensive secret scrubbing (`backend/app/workflow/state_machine.py`)
 - [ ] Browser automation adapter interface (Playwright)
 - [ ] Form field mapping and safe input filler
 - [ ] Human review & approval queue logic
