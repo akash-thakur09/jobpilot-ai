@@ -7,6 +7,7 @@ from backend.app.models.enums import (
     AutomationRunStatus,
     NotificationChannel,
     NotificationStatus,
+    NotificationType,
 )
 from backend.app.models.candidate import (
     CandidateProfile,
@@ -31,6 +32,7 @@ __all__ = [
     "AutomationRunStatus",
     "NotificationChannel",
     "NotificationStatus",
+    "NotificationType",
     "CandidateProfile",
     "CandidateSkill",
     "CandidateExperience",

@@ -25,6 +25,14 @@ import {
   ResumeVersion,
   SubmissionAttempt,
   SubmissionAttemptListResponse,
+  SchedulerStatus,
+  SchedulerConfigUpdate,
+  SchedulerRunRequest,
+  AutomationRunItem,
+  AutomationRunListResponse,
+  Notification,
+  NotificationListResponse,
+  UnreadCountResponse,
 } from '../types';
 
 export class ApiError extends Error {
@@ -347,4 +355,71 @@ export const api = {
       });
     },
   },
+
+  // -------------------------------------------------------------------------
+  // Scheduler & Automation Runs
+  // -------------------------------------------------------------------------
+  scheduler: {
+    getStatus: () => request<SchedulerStatus>('/api/v1/scheduler/status'),
+    updateConfig: (config: SchedulerConfigUpdate) =>
+      request<SchedulerStatus>('/api/v1/scheduler/config', {
+        method: 'POST',
+        body: JSON.stringify(config),
+      }),
+    run: (params: SchedulerRunRequest = {}) =>
+      request<any>('/api/v1/scheduler/run', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      }),
+    listRuns: (params: { limit?: number; offset?: number; status?: string } = {}) => {
+      const query = new URLSearchParams();
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.offset !== undefined) query.set('offset', String(params.offset));
+      if (params.status) query.set('status', params.status);
+      const qs = query.toString();
+      return request<AutomationRunListResponse>(`/api/v1/scheduler/runs${qs ? `?${qs}` : ''}`);
+    },
+    getRun: (runId: string) =>
+      request<AutomationRunItem>(`/api/v1/scheduler/runs/${runId}`),
+  },
+
+  // -------------------------------------------------------------------------
+  // Notifications
+  // -------------------------------------------------------------------------
+  notifications: {
+    list: (params: {
+      is_read?: boolean;
+      is_dismissed?: boolean;
+      notification_type?: string;
+      limit?: number;
+      offset?: number;
+    } = {}) => {
+      const query = new URLSearchParams();
+      if (params.is_read !== undefined) query.set('is_read', String(params.is_read));
+      if (params.is_dismissed !== undefined) query.set('is_dismissed', String(params.is_dismissed));
+      if (params.notification_type) query.set('notification_type', params.notification_type);
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.offset !== undefined) query.set('offset', String(params.offset));
+      const qs = query.toString();
+      return request<NotificationListResponse>(`/api/v1/notifications${qs ? `?${qs}` : ''}`);
+    },
+    getUnreadCount: () =>
+      request<UnreadCountResponse>('/api/v1/notifications/unread-count'),
+    markAsRead: (notificationId: string) =>
+      request<{ success: boolean; notification: Notification }>(
+        `/api/v1/notifications/${notificationId}/read`,
+        { method: 'POST' }
+      ),
+    markAllAsRead: () =>
+      request<{ success: boolean; updated_count: number }>(
+        '/api/v1/notifications/read-all',
+        { method: 'POST' }
+      ),
+    dismiss: (notificationId: string) =>
+      request<{ success: boolean; notification: Notification }>(
+        `/api/v1/notifications/${notificationId}/dismiss`,
+        { method: 'POST' }
+      ),
+  },
 };
+

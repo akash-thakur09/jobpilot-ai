@@ -87,7 +87,39 @@ The frontend will be available at `http://localhost:5173` and the backend API do
 - `GET /api/v1/resumes/{version_id}` — Get resume version metadata, validation reports, keyword coverage, and candidate snapshot
 - `GET /api/v1/resumes/job/{job_id}` — List all historical generated resume versions for a specific job
 - `GET /api/v1/resumes/{version_id}/download` — Stream exact immutable PDF file with cache headers and filename
-- `GET /api/v1/resumes/{version_id}/integrity` — Verify stored file presence and SHA-256 integrity match on disk
+### Application Workflow & Browser Automation (Phase 5)
+- `POST /api/v1/applications/prepare` — Prepare candidate application package, trigger resume generation, calculate canonical approval fingerprint
+- `GET /api/v1/applications` — List applications with status and candidate filters
+- `GET /api/v1/applications/{id}` — Get single application review package
+- `GET /api/v1/applications/{id}/review` — Inspect candidate data snapshot, resume checksum, and approval readiness
+- `POST /api/v1/applications/{id}/approve` — Human approval gate with canonical fingerprint validation
+- `POST /api/v1/applications/{id}/attempt` — Execute synthetic browser automation runner
+- `GET /api/v1/applications/{id}/events` — Application append-only lifecycle event log
+- `GET /api/v1/applications/{id}/attempts` — Complete execution attempts history
+- `POST /api/v1/applications/{id}/reconcile` — Manual outcome reconciliation
+
+### Scheduled Discovery & Automation Runs (Phase 7)
+- `GET /api/v1/scheduler/status` — Get scheduler state, running status, interval, next tick, and latest run telemetry
+- `POST /api/v1/scheduler/config` — Update scheduler configuration (enable/disable, discovery interval)
+- `POST /api/v1/scheduler/run` — Manually trigger immediate 12-stage discovery and matching pipeline
+- `GET /api/v1/scheduler/runs` — List discovery run history with pagination and status filters
+- `GET /api/v1/scheduler/runs/{id}` — Inspect specific run and sanitized source diagnostics
+
+### Persistent In-App Notifications (Phase 7)
+- `GET /api/v1/notifications` — List notifications with read/dismissed state filtering and pagination
+- `GET /api/v1/notifications/unread-count` — Get count of active unread notifications
+- `POST /api/v1/notifications/{id}/read` — Mark notification as read
+- `POST /api/v1/notifications/read-all` — Mark all unread notifications as read
+- `POST /api/v1/notifications/{id}/dismiss` — Dismiss notification from active view
+
+---
+
+## Scheduler Architecture & Safety Guarantees
+
+1. **Unified Pipeline**: Manual and scheduled discovery execute the exact same 12-stage pipeline (`DiscoveryMatchingPipeline.execute`) with rate limiting, error isolation, deterministic eligibility, scoring, and persistent notification generation.
+2. **Process Concurrency Lock**: In-memory `asyncio.Lock` prevents overlapping discovery runs within a single instance.
+3. **Multi-Process & Restart Semantics**: In multi-process deployments (e.g. multiple uvicorn workers), only one worker process should have `SCHEDULER_ENABLED=true` to prevent duplicate scheduled ticks. Missed runs during application downtime coalesce safely upon startup.
+4. **Non-Negotiable Safety**: Scheduled runs perform job fetching and matching **ONLY**. Applications are **never** prepared, approved, or submitted by background tasks. `JOBPILOT_REAL_SUBMISSION_ENABLED=false` remains enforced by default.
 
 ---
 
@@ -98,4 +130,6 @@ The frontend will be available at `http://localhost:5173` and the backend API do
 ---
 
 ## License
+MIT
+
 MIT License.

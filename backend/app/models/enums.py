@@ -61,8 +61,16 @@ class SubmissionOutcome(str, enum.Enum):
 class AutomationRunStatus(str, enum.Enum):
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
+    PARTIAL_SUCCESS = "PARTIAL_SUCCESS"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
+
+
+class NotificationType(str, enum.Enum):
+    NEW_MATCH = "NEW_MATCH"
+    RUN_FAILED = "RUN_FAILED"
+    PARTIAL_FAILURE = "PARTIAL_FAILURE"
+    WORKFLOW_BLOCKER = "WORKFLOW_BLOCKER"
 
 
 class NotificationChannel(str, enum.Enum):
@@ -75,3 +83,4 @@ class NotificationStatus(str, enum.Enum):
     PENDING = "PENDING"
     DELIVERED = "DELIVERED"
     FAILED = "FAILED"
+

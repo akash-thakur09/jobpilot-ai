@@ -81,12 +81,18 @@
 - [x] Application Review & Tracking Queue (`ApplicationQueue.tsx`): cryptographic approval with canonical SHA-256 fingerprint, stale approval handling (HTTP 409), synthetic browser run runner, append-only event timeline, attempt history, and guarded outcome reconciliation
 - [x] 21 automated frontend tests across API client, formatters, and all workspace screens using Vitest and React Testing Library
 
-### Phase 7 — Notifications and Reliability
-- [ ] Local in-app notification store and API
-- [ ] Optional external notification dispatcher (Telegram / Email)
-- [ ] Failure recovery & retry with backoff for network operations
-- [ ] Diagnostic logging and health metrics
-- [ ] Verification under interrupted runs and restart scenarios
+### Phase 7 — Scheduled Discovery, Matching Pipeline, and Persistent Notifications
+- [x] Persistent in-app notification model with database-backed deduplication, read/dismiss states, and clean Alembic migration (`4b81cf738a92`)
+- [x] Configurable background scheduler service (APScheduler with AsyncIOScheduler, process-level concurrency lock, safe startup/shutdown in FastAPI lifespan)
+- [x] Dynamic discovery interval reconfiguration (5 to 10080 minutes) and enable/disable controls
+- [x] Reusable 12-stage discovery and automated matching pipeline (`DiscoveryMatchingPipeline.execute`) shared by manual triggers and scheduler
+- [x] Error isolation across multi-source discovery (`synthetic`, `greenhouse`, `lever`) with status tracking (`COMPLETED`, `PARTIAL_SUCCESS`, `FAILED`)
+- [x] Idempotent match notification creation with unique `dedup_key` for newly relevant eligible matches
+- [x] Failure notifications for complete and partial run failures with defensive secret scrubbing and sanitized diagnostics
+- [x] Scheduler and Notification API endpoints (`/api/v1/scheduler`, `/api/v1/notifications`)
+- [x] Frontend Notification Center popover with live unread badge, type icons, mark-read, and dismiss actions
+- [x] Frontend Scheduler & Discovery management screen and dashboard overview integration with validated interval updates, manual trigger, latest run stats, and diagnostics inspection modal
+- [x] Complete backend test coverage (124 passed tests) and frontend test coverage (27 passed Vitest tests) with verified production build
 
 ### Phase 8 — Security and Release Readiness
 - [ ] Security audit (path traversal prevention, secret scrubbing, CORS)

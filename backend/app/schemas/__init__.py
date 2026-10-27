@@ -45,5 +45,28 @@ __all__ = [
     "SubmissionAttemptListResponse",
     "ApplicationAttemptRequest",
     "ApplicationReconcileRequest",
+    "SchedulerStatusResponse",
+    "SchedulerConfigUpdate",
+    "SchedulerRunRequest",
+    "AutomationRunItem",
+    "AutomationRunListResponse",
+    "NotificationResponse",
+    "NotificationListResponse",
+    "UnreadCountResponse",
+    "MarkReadResponse",
 ]
+
+from backend.app.schemas.scheduler import (
+    SchedulerStatusResponse,
+    SchedulerConfigUpdate,
+    SchedulerRunRequest,
+    AutomationRunItem,
+    AutomationRunListResponse,
+)
+from backend.app.schemas.notification import (
+    NotificationResponse,
+    NotificationListResponse,
+    UnreadCountResponse,
+    MarkReadResponse,
+)
 

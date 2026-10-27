@@ -41,8 +41,10 @@ class Settings(BaseSettings):
 
     # Scheduler & Automation
     SCHEDULER_ENABLED: bool = False
+    DISCOVERY_INTERVAL_MINUTES: int = 240
     DISCOVERY_CRON: str = "0 */4 * * *"
     DISCOVERY_CONCURRENCY_LIMIT: int = 3
+    MATCH_NOTIFICATION_THRESHOLD: int = 70
     REQUIRE_HUMAN_APPROVAL_BEFORE_SUBMISSION: bool = True
     JOBPILOT_REAL_SUBMISSION_ENABLED: bool = False
     BROWSER_HEADLESS: bool = True

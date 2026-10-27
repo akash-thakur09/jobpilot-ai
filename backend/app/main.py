@@ -21,9 +21,14 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
         logger.info("SQLite storage initialized.")
 
+    # Initialize background scheduler
+    from backend.app.services.scheduler_service import SchedulerService
+    await SchedulerService.start()
+
     logger.info("JobPilot AI Backend startup complete.")
     yield
     logger.info("Shutting down JobPilot AI Backend...")
+    await SchedulerService.shutdown()
     await engine.dispose()
     logger.info("Engine disposed.")
 

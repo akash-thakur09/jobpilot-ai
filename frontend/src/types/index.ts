@@ -344,3 +344,103 @@ export interface SubmissionAttemptListResponse {
   limit: number;
   offset: number;
 }
+
+// ---------------------------------------------------------------------------
+// Scheduler & Automation Runs
+// ---------------------------------------------------------------------------
+
+export interface AutomationRunItem {
+  id: string;
+  run_type: string;
+  status: 'RUNNING' | 'COMPLETED' | 'PARTIAL_SUCCESS' | 'FAILED' | 'CANCELLED' | string;
+  items_processed: number;
+  items_succeeded: number;
+  items_failed: number;
+  error_summary?: string | null;
+  started_at: string;
+  completed_at?: string | null;
+  metadata: {
+    trigger?: string;
+    sources_requested?: string[];
+    sources_attempted?: string[];
+    successful_sources?: string[];
+    failed_sources?: string[];
+    source_diagnostics?: Record<string, any>;
+    jobs_discovered?: number;
+    jobs_inserted?: number;
+    jobs_updated?: number;
+    jobs_evaluated?: number;
+    jobs_eligible?: number;
+    new_relevant_matches?: number;
+    notifications_created?: number;
+    [key: string]: any;
+  };
+}
+
+export interface AutomationRunListResponse {
+  items: AutomationRunItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SchedulerStatus {
+  is_enabled: boolean;
+  scheduler_running: boolean;
+  is_active_run: boolean;
+  interval_minutes: number;
+  next_run_time?: string | null;
+  last_run?: AutomationRunItem | null;
+}
+
+export interface SchedulerConfigUpdate {
+  enabled?: boolean;
+  interval_minutes?: number;
+}
+
+export interface SchedulerRunRequest {
+  sources?: string[];
+  use_ai_matching?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export type NotificationType =
+  | 'NEW_MATCH'
+  | 'RUN_FAILED'
+  | 'PARTIAL_FAILURE'
+  | 'WORKFLOW_BLOCKER'
+  | string;
+
+export interface Notification {
+  id: string;
+  notification_type: NotificationType;
+  title: string;
+  message: string;
+  channel: string;
+  status: string;
+  is_read: boolean;
+  is_dismissed: boolean;
+  job_id?: string | null;
+  application_id?: string | null;
+  run_id?: string | null;
+  dedup_key?: string | null;
+  created_at: string;
+  updated_at: string;
+  metadata: Record<string, any>;
+}
+
+export interface NotificationListResponse {
+  items: Notification[];
+  total: number;
+  unread_count: number;
+  limit: number;
+  offset: number;
+}
+
+export interface UnreadCountResponse {
+  unread_count: number;
+}
+

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Menu, Wifi, WifiOff, ShieldCheck } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { NotificationCenter } from '../../features/notifications/NotificationCenter';
 
 interface TopBarProps {
   title: string;
@@ -44,6 +45,9 @@ export const TopBar: React.FC<TopBarProps> = ({ title, onOpenMobileMenu }) => {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* In-App Notifications */}
+        <NotificationCenter />
+
         {/* Synthetic Mode Indicator */}
         <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
           <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />

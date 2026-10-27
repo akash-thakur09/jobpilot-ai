@@ -5,6 +5,8 @@ from backend.app.api.v1.jobs import router as jobs_router
 from backend.app.api.v1.matching import router as matching_router
 from backend.app.api.v1.resumes import router as resumes_router
 from backend.app.api.v1.applications import router as applications_router
+from backend.app.api.v1.scheduler import router as scheduler_router
+from backend.app.api.v1.notifications import router as notifications_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(health_router)
@@ -13,3 +15,6 @@ api_v1_router.include_router(jobs_router)
 api_v1_router.include_router(matching_router)
 api_v1_router.include_router(resumes_router)
 api_v1_router.include_router(applications_router)
+api_v1_router.include_router(scheduler_router)
+api_v1_router.include_router(notifications_router)
+

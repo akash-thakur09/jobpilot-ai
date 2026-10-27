@@ -8,6 +8,7 @@ import {
   UserCheck,
   ShieldAlert,
   Compass,
+  CalendarClock,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -21,6 +22,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
     { to: '/applications', label: 'Applications & Queue', icon: FileCheck2 },
     { to: '/resumes', label: 'Resume Workspace', icon: FileText },
     { to: '/profile', label: 'Candidate Profile', icon: UserCheck },
+    { to: '/scheduler', label: 'Scheduler & Discovery', icon: CalendarClock },
   ];
 
   return (

@@ -5,6 +5,7 @@ import { JobsList } from '../features/jobs/JobsList';
 import { CandidateProfileView } from '../features/profile/CandidateProfileView';
 import { ResumeWorkspace } from '../features/resumes/ResumeWorkspace';
 import { ApplicationQueue } from '../features/applications/ApplicationQueue';
+import { SchedulerManager } from '../features/scheduler/SchedulerManager';
 
 export const router = createBrowserRouter([
   {
@@ -30,6 +31,10 @@ export const router = createBrowserRouter([
       {
         path: 'applications',
         element: <ApplicationQueue />,
+      },
+      {
+        path: 'scheduler',
+        element: <SchedulerManager />,
       },
       {
         path: '*',

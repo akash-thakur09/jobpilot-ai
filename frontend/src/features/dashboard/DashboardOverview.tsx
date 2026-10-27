@@ -17,6 +17,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import { formatDate, getApplicationStatusBadge } from '../../lib/formatters';
+import { SchedulerManager } from '../scheduler/SchedulerManager';
 
 interface DashboardMetrics {
   discoveredJobs: number;
@@ -270,6 +271,12 @@ export const DashboardOverview: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Discovery Scheduler & Automation Section */}
+      <div className="pt-4 border-t border-slate-800/80">
+        <SchedulerManager />
+      </div>
     </div>
   );
 };
+
