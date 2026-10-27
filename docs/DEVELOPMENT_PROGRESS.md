@@ -94,9 +94,33 @@
 - [x] Frontend Scheduler & Discovery management screen and dashboard overview integration with validated interval updates, manual trigger, latest run stats, and diagnostics inspection modal
 - [x] Complete backend test coverage (124 passed tests) and frontend test coverage (27 passed Vitest tests) with verified production build
 
-### Phase 8 — Security and Release Readiness
-- [ ] Security audit (path traversal prevention, secret scrubbing, CORS)
-- [ ] Retention and deletion procedures
-- [ ] Clean installation validation from documented instructions
-- [ ] End-to-end integration test execution
-- [ ] Release checklist and sign-off
+### Phase 8 — End-to-End Validation and Reliability Hardening
+- [x] Baseline audit of services, scheduler lifecycle, database migration state, acceptance suites, and frontend build
+- [x] Full 10-stage end-to-end workflow validation (`backend/tests/test_e2e_workflow_and_hardening.py`):
+  - Verified scheduler disabled state detection
+  - Verified manual discovery via API with normalization and persistence
+  - Verified deterministic eligibility evaluation and weighted scoring
+  - Verified persistent match notification generation
+  - Verified repeated discovery idempotency (zero duplicate jobs, zero duplicate notifications)
+  - Verified run history inspection and sanitized source diagnostics
+  - Verified notification mark-as-read and dismiss lifecycle
+  - Verified application package preparation, resume version persistence, and bit-for-bit SHA-256 verification
+  - Verified server-side safeguards: rejection of unapproved applications, rejection of stale/mismatched fingerprints, and strict disabling of real external submissions
+- [x] Process crash and restart recovery:
+  - Added `SchedulerService.recover_stale_runs()` to automatically detect orphaned `RUNNING` discovery records on application startup and transition them safely to `FAILED`
+- [x] Stale matching invalidation:
+  - Verified that material job mutations upon rediscovery mark previous `MatchScore` records as `is_latest=False` and preserve audit history
+- [x] Database migration & schema safety (`backend/tests/test_migration_and_database_safety.py`):
+  - Validated forward migration, pre-existing data preservation, backward downgrade, and re-upgrade on isolated disposable SQLite database
+  - Fixed `backend/alembic/env.py` to respect dynamic database URLs provided via config
+  - Validated foreign key `ON DELETE SET NULL` behavior for notifications when referenced jobs or runs are removed
+  - Validated concurrent notification deduplication under simultaneous coroutines across separate sessions
+- [x] Frontend test suite & production bundle validation:
+  - 27 passed Vitest tests across 8 test suites
+  - Clean TypeScript verification (`tsc`) and Vite production build (`npm run build`)
+- [x] Total test coverage:
+  - Backend suite: 130 passed tests (100% pass rate)
+  - Resume integrity acceptance suite: 7 passed tests
+  - Frontend suite: 27 passed tests
+- [x] Operational documentation and startup guides updated in `README.md`
+

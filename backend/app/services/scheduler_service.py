@@ -9,6 +9,7 @@ from backend.app.core.config import settings
 from backend.app.core.logging import logger
 from backend.app.db.session import AsyncSessionLocal
 from backend.app.models.automation import AutomationRun
+from backend.app.models.enums import AutomationRunStatus
 from backend.app.services.discovery_pipeline import DiscoveryMatchingPipeline
 
 
@@ -56,8 +57,47 @@ class SchedulerService:
             logger.error(f"Error during scheduled job discovery: {exc}", exc_info=True)
 
     @classmethod
-    async def start(cls):
+    async def recover_stale_runs(cls, session: Optional[Any] = None) -> int:
+        """
+        Recovers from unexpected process termination or crash by marking any orphaned
+        'RUNNING' discovery runs as 'FAILED' with an interrupted error summary.
+        Returns the number of recovered runs.
+        """
+        async def _recover(s):
+            stmt = select(AutomationRun).where(
+                AutomationRun.run_type.like("discovery%"),
+                AutomationRun.status == AutomationRunStatus.RUNNING.value,
+            )
+            res = await s.execute(stmt)
+            stale_runs = res.scalars().all()
+            for r in stale_runs:
+                r.status = AutomationRunStatus.FAILED.value
+                r.error_summary = "Discovery run interrupted by process termination or unexpected restart."
+                r.completed_at = datetime.now(timezone.utc)
+            if stale_runs:
+                await s.commit()
+                logger.warning(f"Recovered {len(stale_runs)} orphaned discovery run(s) left in RUNNING state.")
+            return len(stale_runs)
+
+        try:
+            if session is not None:
+                return await _recover(session)
+            else:
+                async with AsyncSessionLocal() as new_session:
+                    return await _recover(new_session)
+        except Exception as e:
+            logger.error(f"Error recovering stale discovery runs: {e}")
+            return 0
+
+    @classmethod
+    async def start(cls, session: Optional[Any] = None):
         """Initializes and starts the scheduler according to configuration."""
+        # 1. Recover any runs interrupted by prior process termination
+        await cls.recover_stale_runs(session=session)
+
+        # 2. Reset running status
+        cls._is_running_discovery = False
+
         scheduler = cls.get_scheduler()
 
         # Add or replace the scheduled job

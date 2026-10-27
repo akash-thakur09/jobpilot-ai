@@ -24,9 +24,11 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    # Use sync url for alembic
-    url = settings.DATABASE_SYNC_URL
-    return url
+    # Prefer explicit url from Alembic config if provided (e.g. test environments)
+    custom_url = config.get_main_option("sqlalchemy.url")
+    if custom_url:
+        return custom_url
+    return settings.DATABASE_SYNC_URL
 
 
 def run_migrations_offline() -> None:

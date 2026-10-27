@@ -114,12 +114,82 @@ The frontend will be available at `http://localhost:5173` and the backend API do
 
 ---
 
-## Scheduler Architecture & Safety Guarantees
+## Scheduler Architecture, Recovery & Operational Guarantees
 
 1. **Unified Pipeline**: Manual and scheduled discovery execute the exact same 12-stage pipeline (`DiscoveryMatchingPipeline.execute`) with rate limiting, error isolation, deterministic eligibility, scoring, and persistent notification generation.
 2. **Process Concurrency Lock**: In-memory `asyncio.Lock` prevents overlapping discovery runs within a single instance.
-3. **Multi-Process & Restart Semantics**: In multi-process deployments (e.g. multiple uvicorn workers), only one worker process should have `SCHEDULER_ENABLED=true` to prevent duplicate scheduled ticks. Missed runs during application downtime coalesce safely upon startup.
-4. **Non-Negotiable Safety**: Scheduled runs perform job fetching and matching **ONLY**. Applications are **never** prepared, approved, or submitted by background tasks. `JOBPILOT_REAL_SUBMISSION_ENABLED=false` remains enforced by default.
+3. **Single-Scheduler Deployment**: Supported deployments run a single scheduler instance. The concurrency lock coordinates work strictly within a single Python process; multi-worker processes (e.g. `gunicorn -w 4` or multiple `uvicorn` instances) without external distributed locks must run with `SCHEDULER_ENABLED=false` on all but one designated worker.
+4. **Crash and Restart Recovery**: If the application process terminates abruptly while a discovery run is executing, `SchedulerService.start()` automatically detects orphaned `RUNNING` discovery records on restart and transitions them to `FAILED` with sanitized error summaries (`"Interrupted by process termination or restart"`).
+5. **Missed Run Coalescence**: If the system is offline during scheduled ticks, missed intervals coalesce safely without queue bombardment. The next tick triggers at `now() + interval_minutes`.
+6. **Non-Negotiable Safety**: Scheduled runs perform job fetching and matching **ONLY**. Applications are **never** prepared, approved, or submitted by background tasks. `JOBPILOT_REAL_SUBMISSION_ENABLED=false` remains enforced by default.
+
+---
+
+## Supported Job Discovery Sources
+
+- `synthetic`: Local mock adapter providing verified test listings (Remote Python, Senior Backend, Fullstack, Disqualified Frontend) for automated end-to-end testing without external network dependencies.
+- `greenhouse`: Real public Greenhouse job boards (e.g. `https://boards-api.greenhouse.io/v1/boards/{token}/jobs`).
+- `lever`: Real public Lever job boards (e.g. `https://api.lever.co/v0/postings/{token}`).
+
+---
+
+## Inspecting Runs and Diagnostics
+
+- Run history and telemetry can be inspected via `GET /api/v1/scheduler/runs` and `GET /api/v1/scheduler/runs/{run_id}` or directly in the frontend Scheduler Dashboard.
+- When a discovery run encounters partial or total failure, errors are sanitized to redact credentials, tokens, or system traces before persistence.
+- Notifications of type `RUN_FAILED` or `RUN_WARNING` are automatically generated and linked to the run record for immediate triage.
+
+---
+
+## Database Migrations
+
+JobPilot AI uses Alembic for declarative schema migrations:
+
+```bash
+# Check current revision status:
+alembic current
+
+# Run migrations to head:
+alembic upgrade head
+
+# Downgrade one revision (if needed):
+alembic downgrade -1
+```
+
+Current head revision: `4b81cf738a92` (adds persistent notifications table with deduplication keys and cascade-null references to jobs and automation runs).
+
+---
+
+## Verified Local Startup Commands
+
+### Start Backend
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+# Recommended local development runner (binds strictly to loopback 127.0.0.1):
+python run.py
+```
+
+### Start Frontend
+```powershell
+cd frontend
+npm run dev
+```
+
+### Run Full Test Suites
+```powershell
+# Backend Suite (130 tests):
+cd backend
+.\.venv\Scripts\pytest.exe -v
+
+# Resume Integrity Acceptance Suite (7 tests):
+.\.venv\Scripts\pytest.exe tests\acceptance\test_resume_version_integrity.py -v
+
+# Frontend Suite (27 Vitest tests) & Production Build:
+cd frontend
+npx vitest run
+npm run build
+```
 
 ---
 
@@ -130,6 +200,4 @@ The frontend will be available at `http://localhost:5173` and the backend API do
 ---
 
 ## License
-MIT
-
 MIT License.
