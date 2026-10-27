@@ -63,11 +63,11 @@
 - [x] Application & SubmissionAttempt data models with uniqueness constraint on `(candidate_id, job_id)`, approval gate fields, and clean Alembic migration (`3f63fd0f4fae`)
 - [x] Application state machine with strict state transition validation (`backend/app/workflow/state_machine.py`)
 - [x] Append-only application event history with defensive secret scrubbing (`backend/app/workflow/state_machine.py`)
-- [ ] Browser automation adapter interface (Playwright)
-- [ ] Form field mapping and safe input filler
+- [x] Browser automation adapter interface (Playwright) (`backend/app/automation/base_adapter.py`, `backend/app/automation/synthetic_adapter.py`, `backend/app/automation/browser_runner.py`)
+- [x] Conservative form field mapping and safe input filler (`backend/app/automation/form_mapper.py`, `backend/tests/test_form_mapper.py`)
 - [x] Human review & approval queue logic with canonical cryptographic fingerprinting (`backend/app/services/application_workflow_service.py`, `backend/app/workflow/approval_fingerprint.py`)
 - [x] Duplicate application prevention & idempotency controls (`backend/app/services/application_workflow_service.py`)
-- [ ] Mock portal test harness for automated submission verification
+- [x] Mock portal test harness for automated submission verification (`backend/app/automation/mock_portal/server.py`, `backend/tests/test_browser_automation.py`)
 
 ### Phase 6 — Frontend Dashboard
 - [ ] Vite + React + TypeScript setup in `frontend/`

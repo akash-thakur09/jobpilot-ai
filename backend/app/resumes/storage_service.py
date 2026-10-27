@@ -72,11 +72,17 @@ class ResumeStorageService:
         return path
 
     @classmethod
+    def compute_sha256(cls, path: Path) -> str:
+        """Computes SHA-256 checksum of file at path."""
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    @classmethod
     def verify_file_integrity(cls, file_path_str: str, expected_sha256: str) -> bool:
         """Checks if the file exists and matches its recorded SHA-256 checksum."""
         try:
             path = cls.get_resume_pdf_path(file_path_str)
-            computed = hashlib.sha256(path.read_bytes()).hexdigest()
+            computed = cls.compute_sha256(path)
             return computed == expected_sha256
         except Exception:
             return False
+
