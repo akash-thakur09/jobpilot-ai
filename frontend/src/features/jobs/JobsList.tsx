@@ -9,6 +9,8 @@ import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { JobDetailModal } from './JobDetailModal';
 import { JobDiscoveryModal } from './JobDiscoveryModal';
+import { DuplicateClustersModal } from './DuplicateClustersModal';
+import { RankingEvaluationModal } from './RankingEvaluationModal';
 import { 
   formatSalary, 
   formatEligibilityBadge, 
@@ -26,6 +28,8 @@ import {
   ShieldCheck,
   RefreshCw,
   Sparkles,
+  Layers,
+  Activity,
 } from 'lucide-react';
 
 export const JobsList: React.FC = () => {
@@ -45,6 +49,8 @@ export const JobsList: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDiscoveryOpen, setIsDiscoveryOpen] = useState(false);
+  const [isDuplicatesOpen, setIsDuplicatesOpen] = useState(false);
+  const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
   const [evaluatingJobId, setEvaluatingJobId] = useState<string | null>(null);
   const [preparingJobId, setPreparingJobId] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -165,7 +171,7 @@ export const JobsList: React.FC = () => {
             Real jobs stored locally, evaluated against your verified profile constraints.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -173,6 +179,22 @@ export const JobsList: React.FC = () => {
             icon={<RefreshCw className="w-3.5 h-3.5" />}
           >
             Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsDuplicatesOpen(true)}
+            icon={<Layers className="w-3.5 h-3.5 text-purple-400" />}
+          >
+            Duplicates
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsEvaluationOpen(true)}
+            icon={<Activity className="w-3.5 h-3.5 text-blue-400" />}
+          >
+            Ranking Eval
           </Button>
           <Button
             variant="primary"
@@ -361,6 +383,21 @@ export const JobsList: React.FC = () => {
                           {scoreConfig.label} Match
                         </Badge>
                       )}
+                      {job.freshness_status === 'POTENTIALLY_STALE' && (
+                        <Badge variant="warning" size="sm">
+                          Stale
+                        </Badge>
+                      )}
+                      {job.freshness_status === 'CONFIRMED_CLOSED' && (
+                        <Badge variant="danger" size="sm">
+                          Closed
+                        </Badge>
+                      )}
+                      {job.duplicate_cluster_id && (
+                        <Badge variant="purple" size="sm">
+                          Duplicate
+                        </Badge>
+                      )}
                       <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
                         {job.source_name || job.source_id}
                       </span>
@@ -462,6 +499,7 @@ export const JobsList: React.FC = () => {
         onClose={() => setIsDetailOpen(false)}
         onPrepareApplication={handlePrepareApplication}
         isPreparing={preparingJobId === selectedJob?.id}
+        onFeedbackChanged={fetchData}
       />
 
       {/* Discovery Modal */}
@@ -471,6 +509,19 @@ export const JobsList: React.FC = () => {
         onDiscoveryComplete={() => {
           fetchData();
         }}
+      />
+
+      {/* Duplicate Clusters Review Modal */}
+      <DuplicateClustersModal
+        isOpen={isDuplicatesOpen}
+        onClose={() => setIsDuplicatesOpen(false)}
+        onRefreshJobs={fetchData}
+      />
+
+      {/* Offline Ranking Evaluation Modal */}
+      <RankingEvaluationModal
+        isOpen={isEvaluationOpen}
+        onClose={() => setIsEvaluationOpen(false)}
       />
     </div>
   );

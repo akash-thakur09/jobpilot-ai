@@ -14,6 +14,7 @@ class DeterministicScoringService:
         candidate: CandidateProfile,
         job: Job,
         weights: Optional[ScoringWeights] = None,
+        feedback: Optional[Any] = None,
     ) -> Tuple[ScoreBreakdown, List[str], List[str], List[str], List[str]]:
         """
         Calculates explainable, deterministic component scores from 0 to 100.
@@ -104,7 +105,7 @@ class DeterministicScoringService:
 
         pref_contributions["explanation"] = "; ".join(pref_explanation_parts) if pref_explanation_parts else "Standard evaluation."
 
-        # Weighted final score calculation
+        # Weighted baseline score calculation
         raw_final = (
             (skills_score * weights.skills)
             + (title_score * weights.title)
@@ -113,7 +114,74 @@ class DeterministicScoringService:
             + (location_score * weights.location_remote)
             + (salary_score * weights.salary)
         )
-        final_score = round(max(0.0, min(100.0, raw_final)), 2)
+
+        # Freshness adjustments and warnings
+        freshness_warning = None
+        freshness_adj = 0.0
+        job_freshness = getattr(job, "freshness_status", "ACTIVE")
+        if job_freshness == "CONFIRMED_CLOSED":
+            freshness_adj = -40.0
+            freshness_warning = f"Listing confirmed closed by source ({getattr(job, 'freshness_reason', '') or 'Inactive'})."
+        elif job_freshness == "POTENTIALLY_STALE":
+            freshness_adj = -10.0
+            freshness_warning = f"Listing may be stale ({getattr(job, 'freshness_reason', '') or 'Not seen recently'})."
+        elif job_freshness == "UNKNOWN":
+            freshness_warning = "Listing verification status is currently unknown."
+
+        # Duplicate cluster status
+        duplicate_warning = None
+        if getattr(job, "duplicate_cluster_id", None):
+            duplicate_warning = "Listing is part of a cross-source duplicate cluster."
+
+        # Feedback adjustments
+        feedback_adj = 0.0
+        feedback_note = None
+        if feedback:
+            fb_type = getattr(feedback, "feedback_type", None)
+            from backend.app.services.feedback_service import FeedbackService
+            mod, note = FeedbackService.get_score_modifier(fb_type)
+            feedback_adj = mod * 100.0
+            feedback_note = note
+
+        final_score = round(max(0.0, min(100.0, raw_final + feedback_adj + freshness_adj)), 2)
+
+        # Build explicit positive, negative, and missing contributions
+        positive_contributions: List[str] = []
+        negative_contributions: List[str] = []
+        missing_information: List[str] = []
+
+        if matched_req:
+            positive_contributions.append(f"Matched {len(matched_req)} core required skills ({', '.join(matched_req)})")
+        if matched_pref:
+            positive_contributions.append(f"Matched {len(matched_pref)} preferred skills ({', '.join(matched_pref)})")
+        if title_score >= 70.0:
+            positive_contributions.append(f"Strong title relevance ({title_score:.0f}%)")
+        if experience_score >= 80.0:
+            positive_contributions.append("Verified professional experience matches requirements")
+        if location_score >= 80.0:
+            positive_contributions.append("Location and work arrangement aligns with candidate profile")
+        if salary_score >= 80.0:
+            positive_contributions.append("Disclosed compensation satisfies salary criteria")
+        if feedback_adj > 0:
+            positive_contributions.append(feedback_note or "User positive feedback applied")
+
+        if missing_req:
+            negative_contributions.append(f"Missing {len(missing_req)} required skills ({', '.join(missing_req)})")
+        if freshness_adj < 0:
+            negative_contributions.append(freshness_warning or "Listing staleness penalty applied")
+        if feedback_adj < 0:
+            negative_contributions.append(feedback_note or "User negative feedback penalty applied")
+        if pref_contributions.get("is_excluded_company"):
+            negative_contributions.append(f"Employer '{job.company}' is in candidate excluded companies list")
+
+        if not job.salary_min and not job.salary_max:
+            missing_information.append("Compensation details not disclosed in vacancy posting")
+        if not job.location or job.location.lower() == "unknown":
+            missing_information.append("Geographical location unspecified")
+        if missing_pref:
+            missing_information.append(f"Unverified or missing preferred skills ({', '.join(missing_pref)})")
+        if job_freshness == "UNKNOWN":
+            missing_information.append("Freshness verification status is unknown")
 
         breakdown = ScoreBreakdown(
             skills_score=round(skills_score, 2),
@@ -124,6 +192,14 @@ class DeterministicScoringService:
             salary_score=round(salary_score, 2),
             final_score=final_score,
             preference_contributions=pref_contributions,
+            positive_contributions=positive_contributions,
+            negative_contributions=negative_contributions,
+            missing_information=missing_information,
+            freshness_warning=freshness_warning,
+            duplicate_warning=duplicate_warning,
+            feedback_adjustment=round(feedback_adj, 2) if feedback_adj else None,
+            feedback_note=feedback_note,
+            scoring_policy_version="1.1.0",
         )
 
         return (
@@ -271,8 +347,8 @@ class DeterministicScoringService:
     @classmethod
     def _score_location(cls, candidate: CandidateProfile, job: Job) -> float:
         """Scores location and remote preference match."""
-        cand_pref = candidate.remote_preference.upper()
-        job_remote = job.remote_type.upper()
+        cand_pref = (candidate.remote_preference or "REMOTE").upper()
+        job_remote = (job.remote_type or "REMOTE").upper()
 
         if job_remote == RemoteType.REMOTE.value:
             return 100.0
@@ -280,9 +356,12 @@ class DeterministicScoringService:
         if cand_pref == job_remote:
             return 100.0
 
+        cand_loc = (candidate.location or "").lower()
+        job_loc = (job.location or "").lower()
+
         # Partial compatibility for hybrid if in same location
         if job_remote == RemoteType.HYBRID.value:
-            if candidate.location.lower() in job.location.lower():
+            if cand_loc and job_loc and cand_loc in job_loc:
                 return 80.0
             return 40.0
 

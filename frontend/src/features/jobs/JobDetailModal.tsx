@@ -1,5 +1,6 @@
-import React from 'react';
-import { Job, MatchScore } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Job, MatchScore, JobFeedback, FeedbackType } from '../../types';
+import { api } from '../../lib/api-client';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -11,6 +12,13 @@ import {
   Calendar, 
   ExternalLink, 
   Sparkles,
+  ThumbsUp,
+  ThumbsDown,
+  CheckSquare,
+  Ban,
+  Copy,
+  Clock,
+  Layers,
 } from 'lucide-react';
 import { formatSalary, formatEligibilityBadge, formatScoreBadge } from '../../lib/formatters';
 
@@ -21,6 +29,7 @@ interface JobDetailModalProps {
   onClose: () => void;
   onPrepareApplication?: (jobId: string) => void;
   isPreparing?: boolean;
+  onFeedbackChanged?: () => void;
 }
 
 export const JobDetailModal: React.FC<JobDetailModalProps> = ({
@@ -30,7 +39,19 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
   onClose,
   onPrepareApplication,
   isPreparing = false,
+  onFeedbackChanged,
 }) => {
+  const [feedback, setFeedback] = useState<JobFeedback | null>(null);
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
+  useEffect(() => {
+    if (job?.id && isOpen) {
+      api.jobs.getFeedback(job.id).then((fb) => setFeedback(fb)).catch(() => setFeedback(null));
+    } else {
+      setFeedback(null);
+    }
+  }, [job?.id, isOpen]);
+
   if (!job) return null;
 
   const eligConfig = matchResult?.eligibility_status 
@@ -41,6 +62,41 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
     : null;
 
   const salaryDisplay = formatSalary(job.salary_min, job.salary_max, job.salary_currency);
+
+  const handleFeedback = async (type: FeedbackType) => {
+    if (!job) return;
+    setIsSubmittingFeedback(true);
+    try {
+      if (feedback?.feedback_type === type) {
+        // Toggle off
+        await api.jobs.deleteFeedback(job.id);
+        setFeedback(null);
+      } else {
+        const updated = await api.jobs.submitFeedback(job.id, type);
+        setFeedback(updated);
+      }
+      if (onFeedbackChanged) onFeedbackChanged();
+    } catch (err) {
+      console.error('Failed to submit feedback', err);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
+  const getFreshnessBadge = (status?: string) => {
+    switch (status) {
+      case 'ACTIVE':
+        return <Badge variant="success" size="sm">Verified Active</Badge>;
+      case 'POTENTIALLY_STALE':
+        return <Badge variant="warning" size="sm">Potentially Stale</Badge>;
+      case 'CONFIRMED_CLOSED':
+        return <Badge variant="danger" size="sm">Confirmed Closed</Badge>;
+      default:
+        return <Badge variant="default" size="sm">Verification Pending</Badge>;
+    }
+  };
+
+  const breakdown = matchResult?.scoring_breakdown;
 
   return (
     <Modal
@@ -74,9 +130,9 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
         </div>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Job metadata header */}
-        <div className="flex flex-wrap items-center gap-4 text-sm text-slate-300 pb-4 border-b border-slate-800">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300 pb-3 border-b border-slate-800">
           <div className="flex items-center gap-1.5 text-slate-200 font-medium">
             <Building2 className="w-4 h-4 text-blue-400" />
             {job.company}
@@ -97,7 +153,103 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
           </div>
           <div className="flex items-center gap-1.5 text-slate-400">
             <Calendar className="w-4 h-4" />
-            {new Date(job.discovered_at).toLocaleDateString()}
+            Discovered {new Date(job.discovered_at).toLocaleDateString()}
+          </div>
+        </div>
+
+        {/* Freshness & Duplicate Badges */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-xs text-slate-400">Freshness:</span>
+              {getFreshnessBadge(job.freshness_status)}
+            </div>
+            {job.duplicate_cluster_id && (
+              <div className="flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-purple-400" />
+                <Badge variant="purple" size="sm">Cross-Source Duplicate Group</Badge>
+              </div>
+            )}
+          </div>
+          {job.last_seen_at && (
+            <div className="text-[11px] text-slate-500 font-mono">
+              Last Verified: {new Date(job.last_seen_at).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+
+        {/* User Recommendation Feedback Controls */}
+        <div className="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-2">
+          <div className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+            <span>Candidate Recommendation Feedback</span>
+            {feedback && (
+              <span className="text-[11px] font-normal text-blue-400">
+                Active: {feedback.feedback_type.replace('_', ' ')}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => handleFeedback('RELEVANT')}
+              disabled={isSubmittingFeedback}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
+                feedback?.feedback_type === 'RELEVANT'
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                  : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <ThumbsUp className="w-3.5 h-3.5" />
+              Relevant
+            </button>
+            <button
+              onClick={() => handleFeedback('NOT_RELEVANT')}
+              disabled={isSubmittingFeedback}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
+                feedback?.feedback_type === 'NOT_RELEVANT'
+                  ? 'bg-red-950 text-red-300 border-red-700'
+                  : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <ThumbsDown className="w-3.5 h-3.5" />
+              Not Relevant
+            </button>
+            <button
+              onClick={() => handleFeedback('ALREADY_APPLIED')}
+              disabled={isSubmittingFeedback}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
+                feedback?.feedback_type === 'ALREADY_APPLIED'
+                  ? 'bg-blue-950 text-blue-300 border-blue-700'
+                  : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              Already Applied
+            </button>
+            <button
+              onClick={() => handleFeedback('NOT_INTERESTED')}
+              disabled={isSubmittingFeedback}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
+                feedback?.feedback_type === 'NOT_INTERESTED'
+                  ? 'bg-amber-950 text-amber-300 border-amber-700'
+                  : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <Ban className="w-3.5 h-3.5" />
+              Not Interested
+            </button>
+            <button
+              onClick={() => handleFeedback('DUPLICATE_LISTING')}
+              disabled={isSubmittingFeedback}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
+                feedback?.feedback_type === 'DUPLICATE_LISTING'
+                  ? 'bg-purple-950 text-purple-300 border-purple-700'
+                  : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <Copy className="w-3.5 h-3.5" />
+              Duplicate Listing
+            </button>
           </div>
         </div>
 
@@ -122,6 +274,9 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                       Match Score: {scoreConfig.label}
                     </Badge>
                   )}
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                    Policy v{matchResult.scoring_policy_version || '1.1.0'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -134,17 +289,39 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
               </div>
             )}
 
-            {/* Score Breakdown */}
-            {matchResult.scoring_breakdown && (
-              <div className="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                {Object.entries(matchResult.scoring_breakdown).map(([k, v]) => (
-                  <div key={k} className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
-                    <div className="text-slate-400 mb-0.5 capitalize">{k.replace('_', ' ')}</div>
-                    <div className="text-base font-semibold text-blue-400">
-                      {typeof v === 'number' ? `${Math.round(v * 100)}%` : String(v)}
-                    </div>
+            {/* Explainable Contributions Breakdown */}
+            {breakdown && (
+              <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2 text-xs">
+                {breakdown.positive_contributions && breakdown.positive_contributions.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="font-semibold text-emerald-400">Positive Factors:</span>
+                    <ul className="list-disc list-inside text-slate-300 space-y-0.5">
+                      {breakdown.positive_contributions.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
                   </div>
-                ))}
+                )}
+                {breakdown.negative_contributions && breakdown.negative_contributions.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <span className="font-semibold text-red-400">Deductions / Concerns:</span>
+                    <ul className="list-disc list-inside text-slate-300 space-y-0.5">
+                      {breakdown.negative_contributions.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {breakdown.missing_information && breakdown.missing_information.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <span className="font-semibold text-amber-400">Missing Information:</span>
+                    <ul className="list-disc list-inside text-slate-400 space-y-0.5">
+                      {breakdown.missing_information.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>

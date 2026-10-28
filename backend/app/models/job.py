@@ -4,7 +4,38 @@ from typing import List, Optional
 from sqlalchemy import String, Text, Float, Boolean, Integer, ForeignKey, JSON, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.db.base import Base, TimestampMixin
-from backend.app.models.enums import RemoteType, JobStatus, RequirementType
+from backend.app.models.enums import (
+    RemoteType,
+    JobStatus,
+    RequirementType,
+    FreshnessStatus,
+    DuplicateConfidence,
+    ClusterStatus,
+)
+
+
+class JobDuplicateCluster(Base, TimestampMixin):
+    __tablename__ = "job_duplicate_clusters"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    canonical_job_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("jobs.id", ondelete="SET NULL", use_alter=True), nullable=True, index=True
+    )
+    cluster_status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default=ClusterStatus.DETECTED.value, index=True
+    )
+    confidence: Mapped[str] = mapped_column(
+        String(50), nullable=False, default=DuplicateConfidence.POSSIBLE_DUPLICATE.value
+    )
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    match_reasons: Mapped[List[str]] = mapped_column(JSON, nullable=False, default=list)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    jobs: Mapped[List["Job"]] = relationship(
+        "Job", back_populates="duplicate_cluster", foreign_keys="Job.duplicate_cluster_id"
+    )
+    canonical_job: Mapped[Optional["Job"]] = relationship("Job", foreign_keys=[canonical_job_id])
 
 
 class JobSource(Base, TimestampMixin):
@@ -50,7 +81,29 @@ class Job(Base, TimestampMixin):
     )
     raw_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    # Freshness & lifecycle
+    posted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+    freshness_status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default=FreshnessStatus.ACTIVE.value, index=True
+    )
+    freshness_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Duplicate management
+    duplicate_cluster_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("job_duplicate_clusters.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     source: Mapped["JobSource"] = relationship("JobSource", back_populates="jobs")
+    duplicate_cluster: Mapped[Optional["JobDuplicateCluster"]] = relationship(
+        "JobDuplicateCluster", back_populates="jobs", foreign_keys=[duplicate_cluster_id]
+    )
     requirements: Mapped[List["JobRequirement"]] = relationship(
         "JobRequirement", back_populates="job", cascade="all, delete-orphan"
     )
@@ -62,6 +115,9 @@ class Job(Base, TimestampMixin):
     )
     applications: Mapped[List["Application"]] = relationship(
         "Application", back_populates="job", cascade="all, delete-orphan"
+    )
+    feedbacks: Mapped[List["JobFeedback"]] = relationship(
+        "JobFeedback", back_populates="job", cascade="all, delete-orphan"
     )
 
 

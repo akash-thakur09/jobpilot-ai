@@ -51,6 +51,13 @@ class JobRead(BaseModel):
     currency: Optional[str] = None
     status: str
     discovered_at: datetime
+    posted_at: Optional[datetime] = None
+    first_seen_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    freshness_status: str = "ACTIVE"
+    freshness_reason: Optional[str] = None
+    last_verified_at: Optional[datetime] = None
+    duplicate_cluster_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
@@ -61,6 +68,53 @@ class JobListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class JobDuplicateClusterRead(BaseModel):
+    id: str
+    canonical_job_id: Optional[str] = None
+    cluster_status: str
+    confidence: str
+    confidence_score: float
+    match_reasons: List[str] = Field(default_factory=list)
+    reviewed_at: Optional[datetime] = None
+    review_notes: Optional[str] = None
+    created_at: datetime
+    jobs: List[JobRead] = Field(default_factory=list)
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DuplicateReviewRequest(BaseModel):
+    action: str = Field(..., description="'CONFIRM' or 'DISMISS'")
+    notes: Optional[str] = None
+
+
+class JobFeedbackCreate(BaseModel):
+    feedback_type: str = Field(..., description="RELEVANT, NOT_RELEVANT, ALREADY_APPLIED, NOT_INTERESTED, DUPLICATE_LISTING")
+    reason: Optional[str] = None
+    structured_details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class JobFeedbackRead(BaseModel):
+    id: str
+    candidate_id: str
+    job_id: str
+    feedback_type: str
+    reason: Optional[str] = None
+    structured_details: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobFreshnessRead(BaseModel):
+    job_id: str
+    freshness_status: str
+    freshness_reason: Optional[str] = None
+    first_seen_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    last_verified_at: Optional[datetime] = None
+    posted_at: Optional[datetime] = None
 
 
 class JobDiscoveryRequest(BaseModel):

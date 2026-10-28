@@ -93,6 +93,152 @@ async def update_job_source_config(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
 
 
+from backend.app.models.job import Job, JobSource, JobDuplicateCluster
+from backend.app.models.candidate import CandidateProfile
+from backend.app.models.feedback import JobFeedback
+from backend.app.schemas.job import (
+    JobRead,
+    JobListResponse,
+    JobSourceRead,
+    JobSourceConfigUpdate,
+    JobDiscoveryRequest,
+    JobDiscoveryResponse,
+    JobDuplicateClusterRead,
+    DuplicateReviewRequest,
+    JobFeedbackCreate,
+    JobFeedbackRead,
+    JobFreshnessRead,
+)
+from backend.app.services.job_discovery_service import JobDiscoveryService
+from backend.app.services.duplicate_detection_service import DuplicateDetectionService
+from backend.app.services.feedback_service import FeedbackService
+from sqlalchemy.orm import selectinload
+
+
+@router.get("/duplicates", response_model=list[JobDuplicateClusterRead])
+async def list_duplicate_clusters(
+    cluster_status: Optional[str] = Query(None, description="FILTER by DETECTED, CONFIRMED, DISMISSED"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_db),
+):
+    """List cross-source duplicate clusters and their grouped listings."""
+    stmt = (
+        select(JobDuplicateCluster)
+        .options(selectinload(JobDuplicateCluster.jobs))
+        .offset(offset)
+        .limit(limit)
+        .order_by(JobDuplicateCluster.created_at.desc())
+    )
+    if cluster_status:
+        stmt = stmt.where(JobDuplicateCluster.cluster_status == cluster_status.upper())
+
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+
+@router.post("/duplicates/{cluster_id}/review", response_model=JobDuplicateClusterRead)
+async def review_duplicate_cluster(
+    cluster_id: str,
+    request: DuplicateReviewRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Confirm or dismiss a detected duplicate cluster."""
+    try:
+        return await DuplicateDetectionService.review_cluster(
+            session=session,
+            cluster_id=cluster_id,
+            action=request.action,
+            notes=request.notes,
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+
+
+@router.get("/{job_id}/freshness", response_model=JobFreshnessRead)
+async def get_job_freshness(job_id: str, session: AsyncSession = Depends(get_db)):
+    """Retrieve job verification history and freshness status."""
+    res = await session.execute(select(Job).where(Job.id == job_id))
+    job = res.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+
+    return JobFreshnessRead(
+        job_id=job.id,
+        freshness_status=job.freshness_status,
+        freshness_reason=job.freshness_reason,
+        first_seen_at=job.first_seen_at,
+        last_seen_at=job.last_seen_at,
+        last_verified_at=job.last_verified_at,
+        posted_at=job.posted_at,
+    )
+
+
+@router.post("/{job_id}/feedback", response_model=JobFeedbackRead)
+async def submit_job_feedback(
+    job_id: str,
+    request: JobFeedbackCreate,
+    candidate_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_db),
+):
+    """Submit idempotent user feedback on a job recommendation."""
+    if not candidate_id:
+        cand_res = await session.execute(select(CandidateProfile).limit(1))
+        candidate = cand_res.scalar_one_or_none()
+        if not candidate:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate profile not found.")
+        candidate_id = candidate.id
+
+    try:
+        feedback = await FeedbackService.record_feedback(
+            session=session,
+            candidate_id=candidate_id,
+            job_id=job_id,
+            feedback_type=request.feedback_type,
+            reason=request.reason,
+            structured_details=request.structured_details,
+        )
+        return feedback
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+
+
+@router.get("/{job_id}/feedback", response_model=Optional[JobFeedbackRead])
+async def get_job_feedback(
+    job_id: str,
+    candidate_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_db),
+):
+    """Retrieve existing user feedback for a job."""
+    if not candidate_id:
+        cand_res = await session.execute(select(CandidateProfile).limit(1))
+        candidate = cand_res.scalar_one_or_none()
+        if not candidate:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate profile not found.")
+        candidate_id = candidate.id
+
+    feedback = await FeedbackService.get_feedback(session, candidate_id, job_id)
+    return feedback
+
+
+@router.delete("/{job_id}/feedback", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_job_feedback(
+    job_id: str,
+    candidate_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_db),
+):
+    """Remove user feedback for a job."""
+    if not candidate_id:
+        cand_res = await session.execute(select(CandidateProfile).limit(1))
+        candidate = cand_res.scalar_one_or_none()
+        if not candidate:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate profile not found.")
+        candidate_id = candidate.id
+
+    await FeedbackService.delete_feedback(session, candidate_id, job_id)
+    return None
+
+
 @router.get("/{job_id}", response_model=JobRead)
 async def get_job_detail(job_id: str, session: AsyncSession = Depends(get_db)):
     """Retrieve details of a specific job listing."""

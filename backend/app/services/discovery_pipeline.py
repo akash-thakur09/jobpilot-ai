@@ -129,6 +129,10 @@ class DiscoveryMatchingPipeline:
                     src_updated = 0
                     src_unchanged = 0
                     src_failed = 0
+                    seen_source_job_ids: List[str] = []
+
+                    from backend.app.services.job_freshness_service import JobFreshnessService
+                    from backend.app.models.enums import FreshnessStatus
 
                     # Stage 4 & 5: Normalize and deduplicate
                     for raw in raw_items:
@@ -144,6 +148,9 @@ class DiscoveryMatchingPipeline:
                             existing_job = existing_res.scalar_one_or_none()
 
                             if existing_job:
+                                seen_source_job_ids.append(existing_job.id)
+                                await JobFreshnessService.mark_job_verified_active(session, existing_job)
+
                                 # Stage 6: Update existing job only if material fields changed
                                 has_changes = False
                                 if existing_job.title != normalized.title:
@@ -163,6 +170,7 @@ class DiscoveryMatchingPipeline:
                                 else:
                                     src_unchanged += 1
                             else:
+                                now_dt = datetime.now(timezone.utc)
                                 # Insert brand new job
                                 new_job = Job(
                                     source_id=source_record.id,
@@ -179,14 +187,32 @@ class DiscoveryMatchingPipeline:
                                     currency=normalized.currency,
                                     status=JobStatus.DISCOVERED.value,
                                     raw_payload=normalized.raw_payload,
+                                    posted_at=getattr(normalized, "posted_at", None),
+                                    first_seen_at=now_dt,
+                                    last_seen_at=now_dt,
+                                    last_verified_at=now_dt,
+                                    freshness_status=FreshnessStatus.ACTIVE.value,
+                                    freshness_reason="Initial discovery",
                                 )
                                 session.add(new_job)
+                                await session.flush()
+                                seen_source_job_ids.append(new_job.id)
                                 src_inserted += 1
                                 newly_saved_jobs.append(new_job)
 
                         except Exception as item_err:
                             logger.error(f"Error normalizing item {getattr(raw, 'external_id', 'unknown')} from {src_id}: {item_err}")
                             src_failed += 1
+
+                    # Evaluate staleness for jobs from this source not seen in this run
+                    try:
+                        await JobFreshnessService.evaluate_source_staleness(
+                            session=session,
+                            source_id=source_record.id,
+                            seen_job_ids=seen_source_job_ids,
+                        )
+                    except Exception as stale_err:
+                        logger.warning(f"Staleness evaluation warning for source {src_id}: {stale_err}")
 
                     # Commit saved batch for this source
                     source_record.last_discovered_at = datetime.now(timezone.utc)
@@ -231,6 +257,16 @@ class DiscoveryMatchingPipeline:
                         await session.commit()
                     except Exception:
                         await session.rollback()
+
+        # Stage 6b: Cross-source duplicate detection and clustering
+        if newly_saved_jobs:
+            from backend.app.services.duplicate_detection_service import DuplicateDetectionService
+            for j in newly_saved_jobs:
+                try:
+                    await DuplicateDetectionService.cluster_job(session, j)
+                except Exception as dup_err:
+                    logger.warning(f"Duplicate clustering failed gracefully for job {j.id}: {dup_err}")
+            await session.commit()
 
         # Stage 7 to 9: Deterministic eligibility and scoring evaluation for new/updated jobs
         matching_service = MatchingService()

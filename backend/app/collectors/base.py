@@ -27,6 +27,7 @@ class NormalizedJob(BaseModel):
     salary_min: Optional[float] = None
     salary_max: Optional[float] = None
     currency: Optional[str] = "USD"
+    posted_at: Optional[datetime] = None
     raw_payload: Optional[Dict[str, Any]] = None
 
 

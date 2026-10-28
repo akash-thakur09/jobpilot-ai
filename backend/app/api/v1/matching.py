@@ -78,6 +78,16 @@ async def get_match_result_for_job(job_id: str, session: AsyncSession = Depends(
     return score
 
 
+@router.post("/evaluate-ranking", status_code=status.HTTP_200_OK)
+async def run_ranking_evaluation():
+    """
+    Runs the offline ranking evaluation suite against labeled benchmark fixtures.
+    Returns Precision@K, Recall@K, NDCG@K, duplicate detection, and freshness accuracy.
+    """
+    from backend.app.evaluation.runner import OfflineRankingEvaluator
+    return OfflineRankingEvaluator.run_evaluation()
+
+
 @router.get("/health")
 async def check_matching_health():
     """Checks the health of the deterministic matching engine and Ollama AI provider."""
@@ -85,7 +95,8 @@ async def check_matching_health():
     ai_online = await ollama.is_available()
     return {
         "status": "healthy",
-        "engine": "Deterministic Matching Engine v1.0",
+        "engine": "Deterministic Matching Engine v1.1.0",
+        "scoring_policy_version": "1.1.0",
         "ai_provider": ollama.provider_name,
         "ai_model": ollama.model_name,
         "ai_available": ai_online,

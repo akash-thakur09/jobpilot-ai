@@ -72,16 +72,20 @@ class MatchingService:
         # 3. Deterministic Eligibility Check
         is_eligible, eligibility_status, checks = EligibilityService.evaluate_eligibility(candidate, job)
 
-        # 4. Deterministic Weighted Scoring
+        # 4. Fetch candidate feedback on this job if available
+        from backend.app.services.feedback_service import FeedbackService
+        feedback = await FeedbackService.get_feedback(session, candidate.id, job.id)
+
+        # 5. Deterministic Weighted Scoring
         (
             breakdown,
             matched_req,
             matched_pref,
             missing_req,
             missing_pref,
-        ) = DeterministicScoringService.calculate_score(candidate, job, weights)
+        ) = DeterministicScoringService.calculate_score(candidate, job, weights, feedback=feedback)
 
-        # 5. Optional Semantic Analysis via Ollama
+        # 6. Optional Semantic Analysis via Ollama
         provider_meta: Dict[str, Any] = {"ai_enabled": use_ai, "ai_provider": "none"}
         semantic_summary = None
         if use_ai and await self.ai_provider.is_available():
@@ -111,7 +115,7 @@ class MatchingService:
         else:
             provider_meta["skipped_reason"] = "AI provider unavailable or disabled"
 
-        # 6. Synthesize Explanation & Warnings
+        # 7. Synthesize Explanation & Warnings
         explanation = self._build_explanation(
             job=job,
             eligibility_status=eligibility_status,
@@ -130,13 +134,18 @@ class MatchingService:
             unknown_rules = [c.reason for c in checks if c.status.value == "UNKNOWN"]
             warnings.append(f"Needs candidate review: {'; '.join(unknown_rules)}")
 
+        if breakdown.freshness_warning:
+            warnings.append(breakdown.freshness_warning)
+        if breakdown.duplicate_warning:
+            warnings.append(breakdown.duplicate_warning)
+
         uncertainties = [c.reason for c in checks if c.status.value == "UNKNOWN"]
 
         job_fingerprint = hashlib.sha256(
             f"{job.title}:{job.company}:{job.description}".encode()
         ).hexdigest()
 
-        # 7. Persist to Database with version preservation
+        # 8. Persist to Database with version preservation
         # Mark previous evaluations as not latest
         await session.execute(
             update(MatchScore)
@@ -161,7 +170,7 @@ class MatchingService:
             uncertainties=uncertainties,
             warnings=warnings,
             explanation=explanation,
-            scoring_policy_version="1.0.0",
+            scoring_policy_version="1.1.0",
             job_fingerprint=job_fingerprint,
             provider_metadata=provider_meta,
             is_latest=True,
@@ -232,6 +241,16 @@ class MatchingService:
             parts.append(f"Matching core skills: {', '.join(matched_req)}.")
         if missing_req:
             parts.append(f"Missing core skills: {', '.join(missing_req)}.")
+
+        if breakdown.positive_contributions:
+            parts.append(f"Key Advantages: {'; '.join(breakdown.positive_contributions[:3])}.")
+        if breakdown.negative_contributions:
+            parts.append(f"Concerns / Deductions: {'; '.join(breakdown.negative_contributions[:3])}.")
+
+        if breakdown.freshness_warning:
+            parts.append(f"Freshness Status: {breakdown.freshness_warning}")
+        if breakdown.duplicate_warning:
+            parts.append(f"Duplicate Notice: {breakdown.duplicate_warning}")
 
         if breakdown.preference_contributions and breakdown.preference_contributions.get("explanation"):
             parts.append(f"Preference Alignment: {breakdown.preference_contributions['explanation']}")

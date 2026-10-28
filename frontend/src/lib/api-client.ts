@@ -42,6 +42,10 @@ import {
   UnreadCountResponse,
   DigestStatus,
   DeliveryHistoryResponse,
+  JobDuplicateCluster,
+  JobFeedback,
+  FeedbackType,
+  RankingEvaluationSummary,
 } from '../types';
 
 export class ApiError extends Error {
@@ -219,6 +223,37 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ source_identifier: sourceIdentifier, ...params }),
       }),
+    listDuplicates: (clusterStatus?: string) => {
+      const qs = clusterStatus ? `?cluster_status=${clusterStatus}` : '';
+      return request<JobDuplicateCluster[]>(`/api/v1/jobs/duplicates${qs}`);
+    },
+    reviewDuplicate: (clusterId: string, action: 'CONFIRM' | 'DISMISS', notes?: string) =>
+      request<JobDuplicateCluster>(`/api/v1/jobs/duplicates/${clusterId}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ action, notes }),
+      }),
+    getFreshness: (jobId: string) =>
+      request<{
+        job_id: string;
+        freshness_status: string;
+        freshness_reason?: string | null;
+        first_seen_at?: string | null;
+        last_seen_at?: string | null;
+        last_verified_at?: string | null;
+        posted_at?: string | null;
+      }>(`/api/v1/jobs/${jobId}/freshness`),
+    submitFeedback: (jobId: string, feedbackType: FeedbackType, reason?: string, details?: Record<string, any>) =>
+      request<JobFeedback>(`/api/v1/jobs/${jobId}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify({
+          feedback_type: feedbackType,
+          reason,
+          structured_details: details || {},
+        }),
+      }),
+    getFeedback: (jobId: string) => request<JobFeedback | null>(`/api/v1/jobs/${jobId}/feedback`),
+    deleteFeedback: (jobId: string) =>
+      request<void>(`/api/v1/jobs/${jobId}/feedback`, { method: 'DELETE' }),
   },
 
   // -------------------------------------------------------------------------
@@ -251,6 +286,10 @@ export const api = {
       return request<MatchScore[]>(`/api/v1/matching/results${qs ? `?${qs}` : ''}`);
     },
     getForJob: (jobId: string) => request<MatchScore>(`/api/v1/matching/results/${jobId}`),
+    evaluateRanking: () =>
+      request<RankingEvaluationSummary>('/api/v1/matching/evaluate-ranking', {
+        method: 'POST',
+      }),
     health: () =>
       request<{ status: string; engine: string; ai_provider: string; ai_available: boolean }>(
         '/api/v1/matching/health'

@@ -157,6 +157,19 @@ export interface ResumeImportResult {
 // Jobs
 // ---------------------------------------------------------------------------
 
+export type FreshnessStatus = 'ACTIVE' | 'POTENTIALLY_STALE' | 'CONFIRMED_CLOSED' | 'UNKNOWN';
+
+export type DuplicateConfidence = 'HIGH_CONFIDENCE' | 'POSSIBLE_DUPLICATE' | 'INSUFFICIENT_EVIDENCE';
+
+export type ClusterStatus = 'DETECTED' | 'CONFIRMED' | 'DISMISSED';
+
+export type FeedbackType =
+  | 'RELEVANT'
+  | 'NOT_RELEVANT'
+  | 'ALREADY_APPLIED'
+  | 'NOT_INTERESTED'
+  | 'DUPLICATE_LISTING';
+
 export interface JobRequirement {
   id: string;
   requirement_type: string;
@@ -178,6 +191,13 @@ export interface Job {
   salary_max?: number | null;
   salary_currency?: string | null;
   discovered_at: string;
+  posted_at?: string | null;
+  first_seen_at?: string | null;
+  last_seen_at?: string | null;
+  freshness_status?: FreshnessStatus;
+  freshness_reason?: string | null;
+  last_verified_at?: string | null;
+  duplicate_cluster_id?: string | null;
   source_name?: string | null;
   requirements?: JobRequirement[];
 }
@@ -187,6 +207,71 @@ export interface JobListResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface JobDuplicateCluster {
+  id: string;
+  canonical_job_id?: string | null;
+  cluster_status: ClusterStatus;
+  confidence: DuplicateConfidence;
+  confidence_score: number;
+  match_reasons: string[];
+  reviewed_at?: string | null;
+  review_notes?: string | null;
+  created_at: string;
+  jobs?: Job[];
+}
+
+export interface JobFeedback {
+  id: string;
+  candidate_id: string;
+  job_id: string;
+  feedback_type: FeedbackType;
+  reason?: string | null;
+  structured_details?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RankingEvaluationSummary {
+  evaluation_dataset_version: string;
+  dataset_size: number;
+  scoring_policy_version: string;
+  evaluated_at: string;
+  metrics: {
+    ranking: {
+      precision_at_3: number;
+      precision_at_5: number;
+      recall_at_3: number;
+      recall_at_5: number;
+      ndcg_at_3: number;
+      ndcg_at_5: number;
+    };
+    duplicate_detection: {
+      precision: number;
+      recall: number;
+      f1: number;
+      true_positives: number;
+      predicted_count: number;
+      ground_truth_count: number;
+    };
+    freshness_accuracy: number;
+  };
+  ranked_results: Array<{
+    job_id: string;
+    title: string;
+    company: string;
+    is_eligible: boolean;
+    eligibility_status: string;
+    score: number;
+    effective_rank_score: number;
+    ground_truth_relevance: number;
+    freshness_status: string;
+    positive_contributions: string[];
+    negative_contributions: string[];
+    warnings: string[];
+  }>;
+  limitations_and_assumptions: string[];
 }
 
 export interface JobSource {
@@ -232,7 +317,25 @@ export interface MatchScore {
   is_eligible: boolean;
   eligibility_status: EligibilityStatus;
   eligibility_checks?: Record<string, any>;
-  scoring_breakdown?: Record<string, any>;
+  scoring_breakdown?: {
+    skills_score?: number;
+    title_score?: number;
+    experience_score?: number;
+    projects_score?: number;
+    location_remote_score?: number;
+    salary_score?: number;
+    final_score?: number;
+    preference_contributions?: Record<string, any>;
+    positive_contributions?: string[];
+    negative_contributions?: string[];
+    missing_information?: string[];
+    freshness_warning?: string | null;
+    duplicate_warning?: string | null;
+    feedback_adjustment?: number | null;
+    feedback_note?: string | null;
+    scoring_policy_version?: string;
+    [key: string]: any;
+  };
   matching_skills?: string[];
   missing_skills?: string[];
   matched_required_skills?: string[];

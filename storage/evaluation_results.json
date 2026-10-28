@@ -1,0 +1,281 @@
+{
+  "evaluation_dataset_version": "1.1.0",
+  "dataset_size": 12,
+  "scoring_policy_version": "1.1.0",
+  "evaluated_at": "2026-10-28T09:42:43.920801+00:00",
+  "metrics": {
+    "ranking": {
+      "precision_at_3": 1.0,
+      "precision_at_5": 0.8,
+      "recall_at_3": 0.6,
+      "recall_at_5": 0.8,
+      "ndcg_at_3": 1.0,
+      "ndcg_at_5": 0.9178
+    },
+    "duplicate_detection": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "true_positives": 3,
+      "predicted_count": 3,
+      "ground_truth_count": 3
+    },
+    "freshness_accuracy": 1.0
+  },
+  "ranked_results": [
+    {
+      "job_id": "job-bench-01",
+      "title": "Senior Python Backend Engineer",
+      "company": "Acme Tech",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 93.5,
+      "effective_rank_score": 93.5,
+      "ground_truth_relevance": 3.0,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Matched 4 preferred skills (Docker, FastAPI, PostgreSQL, Redis)",
+        "Strong title relevance (100%)",
+        "Verified professional experience matches requirements",
+        "Location and work arrangement aligns with candidate profile",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-11",
+      "title": "Senior Python Backend Engineer",
+      "company": "Acme Tech",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 93.5,
+      "effective_rank_score": 93.5,
+      "ground_truth_relevance": 3.0,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Matched 4 preferred skills (Docker, FastAPI, PostgreSQL, Redis)",
+        "Strong title relevance (100%)",
+        "Verified professional experience matches requirements",
+        "Location and work arrangement aligns with candidate profile",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-02",
+      "title": "Senior Python Backend Engineer (Duplicate on JobBoard)",
+      "company": "Acme Tech Inc.",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 90.07,
+      "effective_rank_score": 90.07,
+      "ground_truth_relevance": 3.0,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Matched 4 preferred skills (Docker, FastAPI, PostgreSQL, Redis)",
+        "Strong title relevance (83%)",
+        "Verified professional experience matches requirements",
+        "Location and work arrangement aligns with candidate profile",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-03",
+      "title": "Backend Python Developer",
+      "company": "InnovateCorp",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 88.5,
+      "effective_rank_score": 88.5,
+      "ground_truth_relevance": 2.0,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Matched 1 preferred skills (AWS)",
+        "Strong title relevance (100%)",
+        "Verified professional experience matches requirements",
+        "Location and work arrangement aligns with candidate profile",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-09",
+      "title": "Python API Developer",
+      "company": "LegacyCorp",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 81.83,
+      "effective_rank_score": 81.83,
+      "ground_truth_relevance": 1.0,
+      "freshness_status": "POTENTIALLY_STALE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Matched 1 preferred skills (FastAPI)",
+        "Strong title relevance (92%)",
+        "Verified professional experience matches requirements",
+        "Location and work arrangement aligns with candidate profile",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [
+        "Listing may be stale (Not seen recently)."
+      ],
+      "warnings": [
+        "Listing may be stale (Not seen recently)."
+      ]
+    },
+    {
+      "job_id": "job-bench-06",
+      "title": "Staff Backend Engineer",
+      "company": "SpammySpam Inc",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 78.17,
+      "effective_rank_score": 78.17,
+      "ground_truth_relevance": 0.0,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Verified professional experience matches requirements",
+        "Location and work arrangement aligns with candidate profile",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [
+        "Employer 'SpammySpam Inc' is in candidate excluded companies list"
+      ],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-07",
+      "title": "Python Software Engineer",
+      "company": "StartupX",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 74.92,
+      "effective_rank_score": 74.92,
+      "ground_truth_relevance": 1.5,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Verified professional experience matches requirements"
+      ],
+      "negative_contributions": [],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-12",
+      "title": "Senior Full-Stack Python/React Developer",
+      "company": "InnovateCorp",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 63.83,
+      "effective_rank_score": 63.83,
+      "ground_truth_relevance": 2.5,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Verified professional experience matches requirements",
+        "Location and work arrangement aligns with candidate profile",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [
+        "Missing 1 required skills (React)"
+      ],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-08",
+      "title": "Senior Python Backend Engineer",
+      "company": "ClosedFintech Inc",
+      "is_eligible": true,
+      "eligibility_status": "ELIGIBLE",
+      "score": 53.5,
+      "effective_rank_score": 53.5,
+      "ground_truth_relevance": 0.0,
+      "freshness_status": "CONFIRMED_CLOSED",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Matched 2 preferred skills (FastAPI, PostgreSQL)",
+        "Strong title relevance (100%)",
+        "Verified professional experience matches requirements",
+        "Location and work arrangement aligns with candidate profile",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [
+        "Listing confirmed closed by source (Inactive)."
+      ],
+      "warnings": [
+        "Listing confirmed closed by source (Inactive)."
+      ]
+    },
+    {
+      "job_id": "job-bench-10",
+      "title": "Senior Python Backend Engineer",
+      "company": "DifferentFirm LLC",
+      "is_eligible": false,
+      "eligibility_status": "DISQUALIFIED",
+      "score": 84.83,
+      "effective_rank_score": 0.8483,
+      "ground_truth_relevance": 1.0,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Strong title relevance (97%)",
+        "Verified professional experience matches requirements",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-05",
+      "title": "Principal Python Architect - Secret Clearance Required",
+      "company": "DefenseContractor LLC",
+      "is_eligible": false,
+      "eligibility_status": "DISQUALIFIED",
+      "score": 53.02,
+      "effective_rank_score": 0.5302,
+      "ground_truth_relevance": 0.0,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Matched 1 core required skills (Python)",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [],
+      "warnings": []
+    },
+    {
+      "job_id": "job-bench-04",
+      "title": "Senior Java Cloud Engineer",
+      "company": "Enterprise Software",
+      "is_eligible": false,
+      "eligibility_status": "DISQUALIFIED",
+      "score": 36.5,
+      "effective_rank_score": 0.365,
+      "ground_truth_relevance": 1.0,
+      "freshness_status": "ACTIVE",
+      "positive_contributions": [
+        "Verified professional experience matches requirements",
+        "Disclosed compensation satisfies salary criteria"
+      ],
+      "negative_contributions": [
+        "Missing 1 required skills (Java)"
+      ],
+      "warnings": []
+    }
+  ],
+  "limitations_and_assumptions": [
+    "Evaluated strictly against synthetic benchmark fixtures, not live user behavioral logs.",
+    "Binary relevance threshold for Precision/Recall is ground_truth_relevance >= 2.0.",
+    "Duplicate ground truth is defined by exact cross-source vacancy postings.",
+    "Metrics provide deterministic regression protection against unintended scoring drift."
+  ]
+}

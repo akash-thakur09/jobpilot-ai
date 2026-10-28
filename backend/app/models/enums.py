@@ -88,3 +88,30 @@ class NotificationStatus(str, enum.Enum):
     DELIVERED = "DELIVERED"
     FAILED = "FAILED"
 
+
+class FreshnessStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    POTENTIALLY_STALE = "POTENTIALLY_STALE"
+    CONFIRMED_CLOSED = "CONFIRMED_CLOSED"
+    UNKNOWN = "UNKNOWN"
+
+
+class DuplicateConfidence(str, enum.Enum):
+    HIGH_CONFIDENCE = "HIGH_CONFIDENCE"
+    POSSIBLE_DUPLICATE = "POSSIBLE_DUPLICATE"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+
+
+class ClusterStatus(str, enum.Enum):
+    DETECTED = "DETECTED"
+    CONFIRMED = "CONFIRMED"
+    DISMISSED = "DISMISSED"
+
+
+class FeedbackType(str, enum.Enum):
+    RELEVANT = "RELEVANT"
+    NOT_RELEVANT = "NOT_RELEVANT"
+    ALREADY_APPLIED = "ALREADY_APPLIED"
+    NOT_INTERESTED = "NOT_INTERESTED"
+    DUPLICATE_LISTING = "DUPLICATE_LISTING"
+

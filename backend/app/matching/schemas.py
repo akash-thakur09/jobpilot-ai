@@ -58,6 +58,14 @@ class ScoreBreakdown(BaseModel):
     salary_score: float = Field(..., ge=0.0, le=100.0)
     final_score: float = Field(..., ge=0.0, le=100.0)
     preference_contributions: Dict[str, Any] = Field(default_factory=dict)
+    positive_contributions: List[str] = Field(default_factory=list)
+    negative_contributions: List[str] = Field(default_factory=list)
+    missing_information: List[str] = Field(default_factory=list)
+    freshness_warning: Optional[str] = None
+    duplicate_warning: Optional[str] = None
+    feedback_adjustment: Optional[float] = None
+    feedback_note: Optional[str] = None
+    scoring_policy_version: str = "1.1.0"
 
 
 class MatchEvaluationResult(BaseModel):
@@ -79,7 +87,7 @@ class MatchEvaluationResult(BaseModel):
     uncertainties: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
     explanation: str
-    scoring_policy_version: str = "1.0.0"
+    scoring_policy_version: str = "1.1.0"
     provider_metadata: Dict[str, Any] = Field(default_factory=dict)
     evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

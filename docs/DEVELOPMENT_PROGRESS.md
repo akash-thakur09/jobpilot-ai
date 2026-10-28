@@ -193,3 +193,74 @@
   - Clean TypeScript compilation (`tsc`) and production Vite build (`npm run build`).
 
 
+
+### Phase 11 — Job-Matching Quality and Search Intelligence
+- [x] Comprehensive repository audit:
+  - Validated scoring weights, deterministic eligibility gating, and explanation structures.
+  - Identified cross-source deduplication limitations, update semantics, and freshness fields.
+  - Verified application-history integrity, approval fingerprints, and immutable resume checksum preservation.
+- [x] Conservative Cross-Source Duplicate Detection:
+  - Implemented DuplicateDetectionService with staged evaluation:
+    1. Canonical URL / career-page identifier exact matching (low-cost, high-confidence).
+    2. Normalized blocking on employer name tokens, normalized job title, and location/remote compatibility.
+    3. Multi-signal similarity scoring (company token overlap, title fuzzy similarity, remote/location match, description token Jaccard similarity) bounded by explicit thresholds:
+       - High confidence (score >= 0.85).
+       - Possible duplicate (score >= 0.65).
+       - Insufficient evidence (< 0.65, distinct jobs preserved).
+  - Explicit penalties against false merges: distinct physical locations apply a -0.35 deduction, preserving separate vacancies.
+  - Non-destructive JobDuplicateCluster model: original jobs, sources, external IDs, and application foreign keys are preserved. Zero silent application transfers.
+  - Concurrency safety: atomic database transactions and unique/locking guards prevent duplicate cluster creation.
+  - Safe duplicate review API & UI: allows users to confirm or dismiss suspected duplicates (CONFIRMED, DISMISSED).
+- [x] Job Freshness and Expiration Management:
+  - Extended Job model with posted_at, first_seen_at, last_seen_at, freshness_status (ACTIVE, POTENTIALLY_STALE, CONFIRMED_CLOSED, UNKNOWN), freshness_reason, and last_verified_at.
+  - Implemented JobFreshnessService:
+    - Tracks verification timestamps separately from original posting dates.
+    - Explicit state transitions: evaluate_staleness marks jobs unseen for > 30 days as POTENTIALLY_STALE.
+    - Authoritative closure (mark_closed): only source-authoritative closure signals transition jobs to CONFIRMED_CLOSED.
+    - Source failure isolation: network or adapter failures never mark jobs closed or stale.
+    - Reactivation: previously closed jobs are authoritatively reactivated to ACTIVE upon authoritative rediscovery.
+    - Safe archival: historical application records, match histories, and resume versions are never deleted.
+- [x] Explainable Ranking Improvements & Policy Versioning:
+  - Retained deterministic eligibility filter as a strict gate: DISQUALIFIED jobs can never be overridden by matching scores or user feedback.
+  - Policy Versioning: explicitly bumped scoring policy version to 1.1.0.
+  - Enriched ScoreBreakdown and MatchEvaluationResult with structured lists:
+    - positive_contributions: itemized bonuses (verified skill match, title alignment, remote preference, preferred company, user feedback).
+    - negative_contributions: itemized penalties (missing required skills, excluded company, stale listing penalty -10, confirmed closed penalty -40, negative feedback).
+    - missing_information: flagged unknowns (salary missing, experience missing, remote status unspecified).
+    - freshness_warnings and duplicate_warnings.
+    - feedback_adjustment.
+  - Deterministic bounded scoring in range [0, 100].
+- [x] Candidate User Feedback Loop:
+  - Implemented JobFeedback model with unique constraint on (candidate_id, job_id).
+  - Supported feedback types: RELEVANT, NOT_RELEVANT, ALREADY_APPLIED, NOT_INTERESTED, DUPLICATE_LISTING.
+  - Idempotent upsert, retrieval, and deletion operations via FeedbackService.
+  - Feedback influences ranking deterministically via documented modifiers (+0.10 for Relevant, -0.25 for Not Relevant, -0.50 for Already Applied, -0.40 for Not Interested, -0.30 for Duplicate Listing).
+  - Feedback never mutates verified profile facts or overrides hard eligibility constraints.
+- [x] Offline Ranking Evaluation Framework:
+  - Benchmark test fixtures in backend/app/evaluation/fixtures.py: candidate profile with 12 graded job listings representing strong, weak, disqualified, stale, closed, duplicate, and feedback-adjusted cases.
+  - Evaluation metrics in backend/app/evaluation/metrics.py:
+    - Ranking metrics: Precision@K, Recall@K, NDCG@K using graded relevance labels.
+    - Duplicate detection metrics: Precision, Recall, F1 score.
+    - Freshness accuracy: Classification accuracy against ground truth.
+  - Reproducible CLI runner: backend/evaluation/run_ranking_eval.py outputting machine-readable JSON to storage/evaluation_results.json.
+  - Benchmark performance: Precision@3: 1.0, NDCG@3: 1.0, Duplicate F1: 1.0, Freshness Accuracy: 1.0.
+- [x] Database Schema Migration:
+  - Created and applied Alembic revision d934b51c8a2f (job_duplicate_clusters, job_feedbacks, freshness columns on jobs).
+- [x] API Endpoints:
+  - GET /api/v1/jobs/duplicates: List active duplicate clusters.
+  - POST /api/v1/jobs/duplicates/{id}/review: Review and confirm or dismiss clusters.
+  - GET /api/v1/jobs/{id}/freshness: Inspect job freshness status and verification timestamps.
+  - POST /api/v1/jobs/{id}/feedback: Submit or update candidate feedback.
+  - GET /api/v1/jobs/{id}/feedback: Retrieve current candidate feedback for a job.
+  - DELETE /api/v1/jobs/{id}/feedback: Remove feedback.
+  - POST /api/v1/matching/evaluate-ranking: Trigger offline ranking evaluation and return quality metrics.
+- [x] Frontend Dashboard Extensions:
+  - Updated typed API client in frontend/src/lib/api-client.ts.
+  - Added DuplicateClustersModal.tsx for reviewing and managing cross-source duplicates.
+  - Added RankingEvaluationModal.tsx for development offline evaluation metrics and benchmark inspection.
+  - Enriched JobDetailModal.tsx with freshness badges, duplicate indicators, interactive feedback buttons (Relevant, Not Relevant, Already Applied, Not Interested, Duplicate), and positive/negative contribution breakdowns.
+  - Enriched JobsList.tsx with duplicate and ranking evaluation header buttons, card freshness badges, and duplicate cluster badges.
+- [x] Full Regression Verification:
+  - 164 passed backend tests across 22 test modules (100% pass rate).
+  - 41 passed frontend Vitest tests across 11 test files (100% pass rate).
+  - Clean TypeScript compilation (tsc) and production Vite build.
