@@ -156,4 +156,40 @@
   - Frontend Vitest suite: 34 passed tests across 9 test suites.
   - Clean TypeScript compilation and production Vite build.
 
+### Phase 10 — Notification Delivery Reliability and Digest Scheduling
+- [x] Comprehensive architectural audit verifying email delivery semantics, idempotency, retry bounds, digest membership, scheduler integration, and frontend components.
+- [x] Correct Delivery Status Semantics:
+  - Discontinued misleading `DELIVERED` status for local test/mock dispatches.
+  - Explicit status classifications: `SIMULATED` for mock/console providers (no external network handoff), `SENT` for RFC 5321 SMTP relay acceptance, `PENDING`/`QUEUED` for queued items, and `FAILED` for delivery errors.
+  - Never claims SMTP relay acceptance guarantees final recipient inbox delivery.
+  - Structured attempt tracking persisted in `metadata_json["attempts"]` with sanitized error summaries and timestamps.
+- [x] Timezone-Aware Daily and Weekly Digests:
+  - Implemented `DigestService` resolving candidate timezone preference with fallback to `settings.TIMEZONE` ("UTC") via standard library `zoneinfo.ZoneInfo`.
+  - Deterministic schedule calculations for daily (09:00 AM local) and weekly (Monday 09:00 AM local) digests.
+  - Added database migration `c821a4f02b9e` adding `digest_id` (foreign key to `notifications.id`, ondelete `SET NULL`) and `digested_at` to `notifications`.
+  - Atomically marks covered in-app notifications upon successful digest dispatch (`SENT` or `SIMULATED`), ensuring previously digested items are never duplicated.
+  - If digest delivery fails (`FAILED`), in-app notifications remain unlinked and available for retry.
+  - Missed digest window recovery: detects missed digest windows following process downtime and executes catch-up without duplicate deliveries.
+  - Concurrency safety: guarded with `_digest_lock` to prevent overlapping runs.
+- [x] Scheduler Integration:
+  - Registered `scheduled_digest_job` in `SchedulerService` running every 15 minutes to evaluate due digests across all active candidate profiles.
+  - Integrated with scheduler pause/resume lifecycle and lifespan startup/shutdown.
+- [x] Reliable Email Delivery & Bounded Retries:
+  - Error classification via `is_permanent_smtp_error`: permanent failures (`SMTPAuthenticationError`, `SMTPSenderRefused`, `SMTPRecipientsRefused`, 5xx codes) abort immediately with zero retries.
+  - Transient network failures (timeouts, disconnections) retry up to `EMAIL_MAX_RETRIES` with exponential backoff.
+  - Zero credential persistence in database or API responses.
+  - Email failures never roll back job discovery, score persistence, or in-app notification creation.
+- [x] API Endpoints:
+  - `GET /api/v1/notifications/digest/status`: returns digest configuration, next scheduled time, pending match count, and last digest status.
+  - `POST /api/v1/notifications/digest/trigger`: manual test/catch-up trigger with `force` parameter.
+  - `GET /api/v1/notifications/delivery-history`: returns recent delivery records with attempt counts, real status badges, and actionable errors.
+- [x] Dashboard Improvements:
+  - Enhanced `NotificationSettingsModal.tsx` with provider semantics badge (`Simulated Mode` vs `SMTP Transport Ready`), preferred timezone selector, scheduled digest telemetry card (next run, pending count, trigger action), and recent delivery history table.
+  - Enhanced `NotificationCenter.tsx` with dedicated icon mapping for `DIGEST` notification type.
+- [x] Full Verification:
+  - Backend test suite: 149 passed tests (100% pass rate) across 18 test modules, including 10 deterministic tests in `test_digest_and_delivery_reliability.py`.
+  - Resume integrity acceptance suite: 11 passed tests.
+  - Frontend Vitest suite: 37 passed tests (100% pass rate) across 10 test modules, including 3 UI tests in `digest-and-delivery.test.tsx`.
+  - Clean TypeScript compilation (`tsc`) and production Vite build (`npm run build`).
+
 

@@ -40,6 +40,8 @@ import {
   EmailConfigStatus,
   TestEmailResponse,
   UnreadCountResponse,
+  DigestStatus,
+  DeliveryHistoryResponse,
 } from '../types';
 
 export class ApiError extends Error {
@@ -455,6 +457,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ recipient }),
       }),
+    getDigestStatus: () =>
+      request<DigestStatus>('/api/v1/notifications/digest/status'),
+    triggerDigest: (force: boolean = false) =>
+      request<{ success: boolean; message: string; notification: Notification | null }>(
+        `/api/v1/notifications/digest/trigger${force ? '?force=true' : ''}`,
+        { method: 'POST' }
+      ),
+    getDeliveryHistory: (limit: number = 20) =>
+      request<DeliveryHistoryResponse>(`/api/v1/notifications/delivery-history?limit=${limit}`),
   },
 };
 

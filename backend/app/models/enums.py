@@ -71,6 +71,7 @@ class NotificationType(str, enum.Enum):
     RUN_FAILED = "RUN_FAILED"
     PARTIAL_FAILURE = "PARTIAL_FAILURE"
     WORKFLOW_BLOCKER = "WORKFLOW_BLOCKER"
+    DIGEST = "DIGEST"
 
 
 class NotificationChannel(str, enum.Enum):
@@ -81,6 +82,9 @@ class NotificationChannel(str, enum.Enum):
 
 class NotificationStatus(str, enum.Enum):
     PENDING = "PENDING"
+    QUEUED = "QUEUED"
+    SIMULATED = "SIMULATED"
+    SENT = "SENT"
     DELIVERED = "DELIVERED"
     FAILED = "FAILED"
 

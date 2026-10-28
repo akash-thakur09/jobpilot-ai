@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     EMAIL_USE_TLS: bool = True
     EMAIL_FROM: str = "alerts@jobpilot.local"
     EMAIL_TO: Optional[str] = None
+    EMAIL_MAX_RETRIES: int = 3
+    EMAIL_RETRY_BACKOFF_SECONDS: float = 2.0
+
+    # Digest Schedules & Timezone
+    TIMEZONE: str = "UTC"
+    DIGEST_DAILY_TIME: str = "09:00"
+    DIGEST_WEEKLY_DAY: str = "mon"
+    DIGEST_WEEKLY_TIME: str = "09:00"
 
     # CORS
     CORS_ORIGINS: Union[str, List[str]] = [

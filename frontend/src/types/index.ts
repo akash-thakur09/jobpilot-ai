@@ -497,6 +497,7 @@ export interface NotificationPreferences {
   notify_workflow_blockers: boolean;
   delivery_mode: DeliveryMode;
   min_match_score: number;
+  timezone?: string;
 }
 
 export interface NotificationPreferencesUpdate {
@@ -508,15 +509,65 @@ export interface NotificationPreferencesUpdate {
   notify_workflow_blockers?: boolean;
   delivery_mode?: DeliveryMode;
   min_match_score?: number;
+  timezone?: string;
 }
 
 export interface EmailConfigStatus {
-  configured: boolean;
+  is_available?: boolean;
+  configured?: boolean;
   provider: string;
   from_address?: string | null;
+  recipient?: string | null;
+  email_notifications_enabled?: boolean;
+  timezone?: string;
+  is_simulated?: boolean;
   host?: string | null;
   port?: number | null;
-  use_tls: boolean;
+  use_tls?: boolean;
+}
+
+export interface DigestStatus {
+  email_enabled: boolean;
+  delivery_mode: string;
+  timezone: string;
+  is_provider_configured: boolean;
+  provider: string;
+  recipient?: string | null;
+  min_match_score: number;
+  pending_matches_count: number;
+  next_digest_at?: string | null;
+  last_digest_at?: string | null;
+  last_digest_status?: string | null;
+}
+
+export interface DeliveryHistoryItem {
+  id: string;
+  title: string;
+  channel: string;
+  status: string;
+  status_detail?: string | null;
+  provider: string;
+  recipient?: string | null;
+  sent_at?: string | null;
+  created_at: string;
+  attempt_count: number;
+  attempts: Array<{
+    attempt: number;
+    timestamp: string;
+    status: string;
+    detail?: string;
+    error?: string;
+    is_transient?: boolean;
+  }>;
+  error?: string | null;
+  is_simulated: boolean;
+  digest_id?: string | null;
+  matches_count?: number | null;
+}
+
+export interface DeliveryHistoryResponse {
+  items: DeliveryHistoryItem[];
+  total: number;
 }
 
 export interface TestEmailResponse {
@@ -524,5 +575,6 @@ export interface TestEmailResponse {
   message: string;
   recipient: string;
   provider: string;
+  delivery_status?: string;
 }
 

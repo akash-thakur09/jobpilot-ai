@@ -156,7 +156,7 @@ async def test_email_match_alert_delivery_and_deduplication(db_session: AsyncSes
     )
     assert notif1 is not None
     assert notif1.channel == NotificationChannel.EMAIL.value
-    assert notif1.status == NotificationStatus.DELIVERED.value
+    assert notif1.status == NotificationStatus.SIMULATED.value
     assert "TechCorp" in notif1.title
 
     # 2. Second dispatch for the SAME match: deduplication prevents re-sending

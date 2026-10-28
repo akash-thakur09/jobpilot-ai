@@ -1,11 +1,16 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.core.config import settings
 from backend.app.db.session import get_db
+from backend.app.models.enums import NotificationChannel, NotificationType
+from backend.app.models.notification import Notification
 from backend.app.services.notification_service import NotificationService
 from backend.app.services.email_service import EmailService
 from backend.app.services.candidate_service import CandidateService
+from backend.app.services.digest_service import DigestService
 from backend.app.schemas.notification import (
     NotificationResponse,
     NotificationListResponse,
@@ -16,6 +21,9 @@ from backend.app.schemas.notification import (
     EmailConfigStatusResponse,
     TestEmailRequest,
     TestEmailResponse,
+    DigestStatusResponse,
+    DeliveryHistoryItem,
+    DeliveryHistoryResponse,
 )
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -167,7 +175,7 @@ async def send_test_email(
             detail="No recipient email address available.",
         )
 
-    success, message = await EmailService.send_test_email(recipient)
+    success, message, delivery_status = await EmailService.send_test_email(recipient)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -179,5 +187,114 @@ async def send_test_email(
         message=message,
         recipient=recipient,
         provider=EmailService.get_email_config_status(profile)["provider"],
+        delivery_status=delivery_status.value if hasattr(delivery_status, "value") else str(delivery_status),
     )
+
+
+@router.get("/digest/status", response_model=DigestStatusResponse)
+async def get_digest_status(session: AsyncSession = Depends(get_db)):
+    """Returns digest configuration status, next scheduled run, and pending matches count."""
+    profile = await CandidateService.get_profile(session)
+    prefs = dict(profile.notification_preferences or {}) if profile else {}
+    email_cfg = EmailService.get_email_config_status(profile)
+
+    pending_matches = []
+    if profile:
+        pending_matches = await DigestService.collect_pending_digest_matches(session, profile)
+
+    next_time = DigestService.compute_next_digest_time(profile) if profile else None
+
+    # Query last digest record
+    last_digest_q = (
+        select(Notification)
+        .where(
+            Notification.channel == NotificationChannel.EMAIL.value,
+            Notification.notification_type == NotificationType.DIGEST.value,
+        )
+        .order_by(Notification.created_at.desc())
+        .limit(1)
+    )
+    last_digest_res = await session.execute(last_digest_q)
+    last_digest = last_digest_res.scalar_one_or_none()
+
+    return DigestStatusResponse(
+        email_enabled=prefs.get("email_enabled", False),
+        delivery_mode=prefs.get("delivery_mode", "IMMEDIATE"),
+        timezone=prefs.get("timezone") or settings.TIMEZONE,
+        is_provider_configured=email_cfg["is_available"],
+        provider=email_cfg["provider"],
+        recipient=prefs.get("recipient_email") or email_cfg.get("recipient") or (profile.email if profile else None),
+        min_match_score=prefs.get("min_match_score", settings.MATCH_NOTIFICATION_THRESHOLD),
+        pending_matches_count=len(pending_matches),
+        next_digest_at=next_time.isoformat() if next_time else None,
+        last_digest_at=last_digest.created_at.isoformat() if last_digest and last_digest.created_at else None,
+        last_digest_status=last_digest.status if last_digest else None,
+    )
+
+
+@router.post("/digest/trigger")
+async def trigger_digest_now(
+    force: bool = Query(False, description="Force send digest even if no new pending matches exist"),
+    session: AsyncSession = Depends(get_db),
+):
+    """Manually triggers an immediate digest delivery for candidate testing or catch-up."""
+    profile = await CandidateService.get_profile(session)
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate profile not found.")
+
+    notif = await DigestService.send_scheduled_digest_for_candidate(session, profile, force=force)
+    if not notif:
+        return {
+            "success": True,
+            "message": "No pending eligible matches met criteria. No digest email was required.",
+            "notification": None,
+        }
+
+    return {
+        "success": True,
+        "message": f"Digest processed with status: {notif.status}",
+        "notification": _to_response(notif),
+    }
+
+
+@router.get("/delivery-history", response_model=DeliveryHistoryResponse)
+async def get_delivery_history(
+    limit: int = Query(20, ge=1, le=100),
+    session: AsyncSession = Depends(get_db),
+):
+    """Retrieves recent email delivery history records including simulated, sent, and failed attempts."""
+    query = (
+        select(Notification)
+        .where(Notification.channel == NotificationChannel.EMAIL.value)
+        .order_by(Notification.created_at.desc())
+        .limit(limit)
+    )
+    res = await session.execute(query)
+    items = res.scalars().all()
+
+    history_items = []
+    for it in items:
+        meta = it.metadata_json or {}
+        history_items.append(
+            DeliveryHistoryItem(
+                id=it.id,
+                title=it.title,
+                channel=it.channel,
+                status=it.status,
+                status_detail=meta.get("status_detail"),
+                provider=meta.get("provider", "unknown"),
+                recipient=meta.get("recipient"),
+                sent_at=meta.get("sent_at") or (it.created_at.isoformat() if it.created_at else None),
+                created_at=it.created_at.isoformat() if it.created_at else "",
+                attempt_count=meta.get("attempt_count", 1),
+                attempts=meta.get("attempts", []),
+                error=meta.get("error"),
+                is_simulated=meta.get("is_simulated", False),
+                digest_id=it.digest_id,
+                matches_count=meta.get("matches_count"),
+            )
+        )
+
+    return DeliveryHistoryResponse(items=history_items, total=len(history_items))
+
 

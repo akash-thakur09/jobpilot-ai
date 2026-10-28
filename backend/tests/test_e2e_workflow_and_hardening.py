@@ -90,17 +90,22 @@ async def test_complete_e2e_user_journey(db_session: AsyncSession):
         )
 
         # --- Stage 5: Verify matching evaluation & notifications ---
-        matching_res = await client.get(f"/api/v1/matching/results/{eligible_job['id']}")
-        assert matching_res.status_code == 200
-        match_data = matching_res.json()
-        assert "overall_score" in match_data
-        assert match_data["is_latest"] is True
-
         notifs_res = await client.get("/api/v1/notifications")
         assert notifs_res.status_code == 200
         notifs_data = notifs_res.json()
         assert notifs_data["total"] >= 1
         first_notif = notifs_data["items"][0]
+        assert first_notif["job_id"] is not None
+
+        eligible_job_res = await client.get(f"/api/v1/jobs/{first_notif['job_id']}")
+        assert eligible_job_res.status_code == 200
+        eligible_job = eligible_job_res.json()
+
+        matching_res = await client.get(f"/api/v1/matching/results/{eligible_job['id']}")
+        assert matching_res.status_code == 200
+        match_data = matching_res.json()
+        assert "overall_score" in match_data
+        assert match_data["is_latest"] is True
 
         # --- Stage 6: Repeat discovery - verify idempotency ---
         repeat_res = await client.post("/api/v1/scheduler/run", json={"sources": ["synthetic"]})

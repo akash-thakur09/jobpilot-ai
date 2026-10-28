@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   ShieldAlert,
   Settings,
+  Mail,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { Notification, NotificationType } from '../../types';
@@ -114,6 +115,8 @@ export const NotificationCenter: React.FC = () => {
         return <AlertTriangle className="w-4 h-4 text-amber-400" />;
       case 'WORKFLOW_BLOCKER':
         return <ShieldAlert className="w-4 h-4 text-purple-400" />;
+      case 'DIGEST':
+        return <Mail className="w-4 h-4 text-cyan-400" />;
       default:
         return <Bell className="w-4 h-4 text-indigo-400" />;
     }

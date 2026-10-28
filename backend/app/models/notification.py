@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, JSON, Boolean, ForeignKey
+from sqlalchemy import String, Text, JSON, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.db.base import Base, TimestampMixin
 from backend.app.models.enums import NotificationChannel, NotificationStatus, NotificationType
@@ -29,6 +30,14 @@ class Notification(Base, TimestampMixin):
     )
     run_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("automation_runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    # Optional digest tracking (linking an in-app notification to the digest that covered it)
+    digest_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("notifications.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    digested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
     )
 
     # Unique deduplication key for idempotent creation across runs/retries

@@ -2,6 +2,7 @@ import asyncio
 import smtplib
 from email.message import EmailMessage
 from datetime import datetime, timezone
+from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -11,21 +12,52 @@ from backend.app.core.logging import logger
 from backend.app.models.candidate import CandidateProfile
 from backend.app.models.job import Job
 from backend.app.models.matching import MatchScore
-from backend.app.models.automation import AutomationRun
 from backend.app.models.notification import Notification
 from backend.app.models.enums import NotificationChannel, NotificationStatus, NotificationType
 from backend.app.services.notification_service import NotificationService
 
 
+@dataclass
+class EmailDeliveryResult:
+    success: bool
+    status: NotificationStatus
+    status_detail: str
+    error: Optional[str] = None
+    is_simulated: bool = False
+    attempts: List[Dict[str, Any]] = field(default_factory=list)
+
+
+def is_permanent_smtp_error(exc: Exception) -> bool:
+    """Identifies permanent SMTP errors that should not be retried."""
+    if isinstance(
+        exc,
+        (
+            smtplib.SMTPAuthenticationError,
+            smtplib.SMTPSenderRefused,
+            smtplib.SMTPRecipientsRefused,
+            smtplib.SMTPNotSupportedError,
+        ),
+    ):
+        return True
+    if isinstance(exc, smtplib.SMTPDataError):
+        code = getattr(exc, "smtp_code", None)
+        if code and code >= 500:
+            return True
+    if isinstance(exc, smtplib.SMTPResponseException):
+        if getattr(exc, "smtp_code", 0) >= 500:
+            return True
+    return False
+
+
 class EmailService:
     """
-    Optional email delivery service for JobPilot AI.
-    Features:
-    - Bounded retries
-    - Mock, console, and SMTP delivery modes
-    - Privacy protection: resumes or private profile data are never attached or included
-    - Transactional in-app notification decoupling: provider failures never affect in-app notifications
-    - Idempotent deduplication tracking in the notifications table
+    Robust email delivery service for JobPilot AI.
+    Guarantees:
+    - Accurate delivery semantics: SIMULATED (mock/console), SENT (accepted by SMTP), FAILED.
+    - Bounded retries with exponential backoff for transient errors only; zero retry on permanent errors.
+    - Privacy protection: resumes or private profile data are never attached or exposed.
+    - Transactional in-app notification decoupling: email failures never delete or corrupt in-app notifications.
+    - Idempotent deduplication tracking in the notifications table.
     """
 
     @classmethod
@@ -43,12 +75,16 @@ class EmailService:
     def get_email_config_status(cls, candidate: Optional[CandidateProfile] = None) -> Dict[str, Any]:
         """Returns sanitized email configuration status without exposing credentials."""
         recipient = settings.EMAIL_TO or (candidate.email if candidate else None)
+        prefs = dict(candidate.notification_preferences or {}) if candidate else {}
+        tz = prefs.get("timezone", settings.TIMEZONE)
         return {
             "is_available": cls.is_configured(),
             "provider": settings.EMAIL_PROVIDER,
             "from_address": settings.EMAIL_FROM,
             "recipient": recipient,
             "email_notifications_enabled": settings.EMAIL_NOTIFICATIONS_ENABLED,
+            "timezone": tz,
+            "is_simulated": settings.EMAIL_PROVIDER in {"mock", "console"},
         }
 
     @classmethod
@@ -57,38 +93,91 @@ class EmailService:
         to_email: str,
         subject: str,
         body_text: str,
-        max_retries: int = 2,
-    ) -> Tuple[bool, Optional[str]]:
+        max_retries: Optional[int] = None,
+        backoff_base: Optional[float] = None,
+    ) -> EmailDeliveryResult:
         """
-        Sends an email using configured provider with bounded retries.
-        Returns (success: bool, error_message: Optional[str]).
+        Sends an email using configured provider with bounded retries and status classification.
+        Does not report mock output as real delivered email.
+        Does not claim SMTP acceptance guarantees inbox delivery.
         """
-        if not to_email:
-            return False, "No recipient email address specified."
+        retries = max_retries if max_retries is not None else settings.EMAIL_MAX_RETRIES
+        backoff = backoff_base if backoff_base is not None else settings.EMAIL_RETRY_BACKOFF_SECONDS
+
+        if not to_email or "@" not in to_email:
+            return EmailDeliveryResult(
+                success=False,
+                status=NotificationStatus.FAILED,
+                status_detail="No valid recipient email address specified.",
+                error="Invalid recipient email address.",
+                is_simulated=False,
+                attempts=[],
+            )
 
         provider = settings.EMAIL_PROVIDER.lower()
         clean_subject = NotificationService.sanitize_text(subject)
 
-        # 1. Mock / Test provider
+        # 1. Mock provider
         if provider == "mock":
             logger.info(f"[MOCK EMAIL] To: {to_email} | Subject: {clean_subject} | Length: {len(body_text)} bytes")
-            return True, None
+            return EmailDeliveryResult(
+                success=True,
+                status=NotificationStatus.SIMULATED,
+                status_detail="Simulated delivery via mock provider (no network transmission)",
+                error=None,
+                is_simulated=True,
+                attempts=[
+                    {
+                        "attempt": 1,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "status": NotificationStatus.SIMULATED.value,
+                        "detail": "Mock transmission accepted",
+                    }
+                ],
+            )
 
         # 2. Console provider
         if provider == "console":
             print(f"\n===== [JOBPILOT EMAIL ALERT] =====\nTo: {to_email}\nSubject: {clean_subject}\n\n{body_text}\n==================================\n")
-            return True, None
+            return EmailDeliveryResult(
+                success=True,
+                status=NotificationStatus.SIMULATED,
+                status_detail="Simulated delivery via console stdout",
+                error=None,
+                is_simulated=True,
+                attempts=[
+                    {
+                        "attempt": 1,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "status": NotificationStatus.SIMULATED.value,
+                        "detail": "Console print completed",
+                    }
+                ],
+            )
 
-        # 3. SMTP provider with bounded retries
+        # 3. SMTP provider with transient/permanent error handling and bounded retries
         if provider == "smtp":
+            if not settings.EMAIL_HOST:
+                return EmailDeliveryResult(
+                    success=False,
+                    status=NotificationStatus.FAILED,
+                    status_detail="SMTP host is not configured.",
+                    error="EMAIL_HOST setting is empty.",
+                    is_simulated=False,
+                    attempts=[],
+                )
+
             msg = EmailMessage()
             msg["Subject"] = clean_subject
             msg["From"] = settings.EMAIL_FROM
             msg["To"] = to_email
             msg.set_content(body_text)
 
-            last_err = None
-            for attempt in range(1, max_retries + 1):
+            attempts: List[Dict[str, Any]] = []
+            last_err: Optional[str] = None
+
+            for attempt in range(1, retries + 1):
+                attempt_ts = datetime.now(timezone.utc).isoformat()
                 try:
                     def _sync_send():
                         with smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=10) as server:
@@ -99,18 +188,61 @@ class EmailService:
                             server.send_message(msg)
 
                     await asyncio.to_thread(_sync_send)
-                    logger.info(f"Successfully sent email to {to_email} on attempt {attempt}")
-                    return True, None
+                    logger.info(f"Successfully handed off email to SMTP relay for {to_email} on attempt {attempt}")
+                    attempts.append({
+                        "attempt": attempt,
+                        "timestamp": attempt_ts,
+                        "status": NotificationStatus.SENT.value,
+                        "detail": "Accepted by remote SMTP server for relay",
+                    })
+                    return EmailDeliveryResult(
+                        success=True,
+                        status=NotificationStatus.SENT,
+                        status_detail="Accepted by SMTP transport for relay (inbox delivery depends on recipient server)",
+                        error=None,
+                        is_simulated=False,
+                        attempts=attempts,
+                    )
                 except Exception as exc:
                     sanitized_err = NotificationService.sanitize_text(str(exc))
+                    is_perm = is_permanent_smtp_error(exc)
                     last_err = sanitized_err
-                    logger.warning(f"SMTP delivery attempt {attempt}/{max_retries} to {to_email} failed: {sanitized_err}")
-                    if attempt < max_retries:
-                        await asyncio.sleep(1.0 * attempt)
+                    attempts.append({
+                        "attempt": attempt,
+                        "timestamp": attempt_ts,
+                        "status": NotificationStatus.FAILED.value,
+                        "error": sanitized_err,
+                        "is_transient": not is_perm,
+                    })
+                    logger.warning(
+                        f"SMTP delivery attempt {attempt}/{retries} to {to_email} failed: {sanitized_err} (permanent={is_perm})"
+                    )
 
-            return False, last_err or "SMTP delivery failed after retries."
+                    if is_perm:
+                        logger.warning(f"Aborting retries due to permanent SMTP error: {sanitized_err}")
+                        break
 
-        return False, f"Unsupported email provider '{provider}'."
+                    if attempt < retries:
+                        sleep_time = backoff * (2 ** (attempt - 1))
+                        await asyncio.sleep(sleep_time)
+
+            return EmailDeliveryResult(
+                success=False,
+                status=NotificationStatus.FAILED,
+                status_detail=f"SMTP handoff failed after {len(attempts)} attempt(s)",
+                error=last_err or "SMTP delivery failed after retries.",
+                is_simulated=False,
+                attempts=attempts,
+            )
+
+        return EmailDeliveryResult(
+            success=False,
+            status=NotificationStatus.FAILED,
+            status_detail=f"Unsupported email provider '{provider}'.",
+            error=f"Unsupported email provider '{provider}'.",
+            is_simulated=False,
+            attempts=[],
+        )
 
     @classmethod
     async def send_match_notification(
@@ -125,7 +257,7 @@ class EmailService:
         Guarantees:
         - Never sends repeated emails for the same candidate and job.
         - Never attaches resume or private profile data.
-        - Records email notification record in database.
+        - Records email notification record in database with accurate status (SIMULATED / SENT / FAILED).
         """
         prefs = dict(candidate.notification_preferences or {})
         email_enabled = prefs.get("email_enabled", False)
@@ -137,8 +269,8 @@ class EmailService:
             logger.debug("Email notifications disabled or new matches alerts turned off in candidate preferences.")
             return None
 
-        if delivery_mode != "IMMEDIATE":
-            logger.debug(f"Delivery mode is {delivery_mode}; skipping immediate delivery.")
+        if delivery_mode not in {"IMMEDIATE"}:
+            logger.debug(f"Delivery mode is {delivery_mode}; skipping immediate delivery in favor of digest.")
             return None
 
         if match_score.overall_score < min_score:
@@ -154,9 +286,15 @@ class EmailService:
         dedup_key = f"email_match:{candidate.id}:{job.id}"
         existing_stmt = select(Notification).where(Notification.dedup_key == dedup_key)
         existing_res = await session.execute(existing_stmt)
-        if existing_res.scalar_one_or_none():
-            logger.debug(f"Email match alert for job {job.id} already sent; skipping duplicate.")
-            return None
+        existing_notif = existing_res.scalar_one_or_none()
+        if existing_notif:
+            if existing_notif.status in {
+                NotificationStatus.SENT.value,
+                NotificationStatus.SIMULATED.value,
+                NotificationStatus.DELIVERED.value,
+            }:
+                logger.debug(f"Email match alert for job {job.id} already sent/simulated; skipping duplicate.")
+                return None
 
         # Build privacy-preserving alert body
         subject = f"JobPilot Match: {job.title} at {job.company} ({match_score.overall_score:.0f}% Match)"
@@ -173,27 +311,44 @@ class EmailService:
             f"— JobPilot AI Local Agent"
         )
 
-        success, err_msg = await cls.send_email(to_email=recipient, subject=subject, body_text=body)
+        delivery_res = await cls.send_email(to_email=recipient, subject=subject, body_text=body)
+        if isinstance(delivery_res, tuple):
+            s_ok, s_msg = delivery_res
+            delivery_res = EmailDeliveryResult(
+                success=s_ok,
+                status=NotificationStatus.SENT if s_ok else NotificationStatus.FAILED,
+                status_detail=str(s_msg),
+                error=None if s_ok else str(s_msg),
+                is_simulated=False,
+                attempts=[{"attempt": 1, "timestamp": datetime.now(timezone.utc).isoformat(), "status": "SENT" if s_ok else "FAILED", "detail": str(s_msg)}],
+            )
 
-        # Record in notifications table
-        notif = Notification(
+        notif = existing_notif or Notification(
             title=subject,
             message=body,
             notification_type=NotificationType.NEW_MATCH.value,
             channel=NotificationChannel.EMAIL.value,
-            status=NotificationStatus.DELIVERED.value if success else NotificationStatus.FAILED.value,
+            status=delivery_res.status.value,
             is_read=True,
             is_dismissed=False,
             job_id=job.id,
             dedup_key=dedup_key,
-            metadata_json={
-                "recipient": recipient,
-                "provider": settings.EMAIL_PROVIDER,
-                "delivered": success,
-                "error": err_msg,
-                "sent_at": datetime.now(timezone.utc).isoformat(),
-            },
+            metadata_json={},
         )
+
+        notif.status = delivery_res.status.value
+        notif.metadata_json = {
+            "recipient": recipient,
+            "provider": settings.EMAIL_PROVIDER,
+            "delivery_status": delivery_res.status.value,
+            "status_detail": delivery_res.status_detail,
+            "is_simulated": delivery_res.is_simulated,
+            "attempts": delivery_res.attempts,
+            "attempt_count": len(delivery_res.attempts),
+            "error": delivery_res.error,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        }
+
         session.add(notif)
         await session.commit()
         await session.refresh(notif)
@@ -205,64 +360,97 @@ class EmailService:
         session: AsyncSession,
         candidate: CandidateProfile,
         matches: List[Tuple[Job, MatchScore]],
+        period: str = "daily",
+        period_key: Optional[str] = None,
+        recipient_override: Optional[str] = None,
     ) -> Optional[Notification]:
-        """Sends a consolidated digest of relevant eligible matches."""
+        """
+        Sends a consolidated digest of relevant eligible matches with accurate status semantics.
+        """
         if not matches:
             return None
 
         prefs = dict(candidate.notification_preferences or {})
-        recipient = prefs.get("recipient_email") or settings.EMAIL_TO or candidate.email
+        recipient = recipient_override or prefs.get("recipient_email") or settings.EMAIL_TO or candidate.email
         if not recipient:
             return None
 
-        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        dedup_key = f"email_digest:{candidate.id}:{today_str}"
+        key_str = period_key or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        dedup_key = f"email_digest:{candidate.id}:{period}:{key_str}"
         existing_stmt = select(Notification).where(Notification.dedup_key == dedup_key)
         existing_res = await session.execute(existing_stmt)
-        if existing_res.scalar_one_or_none():
-            logger.debug(f"Daily digest for {today_str} already sent; skipping duplicate.")
-            return None
+        existing_notif = existing_res.scalar_one_or_none()
+        if existing_notif:
+            if existing_notif.status in {
+                NotificationStatus.SENT.value,
+                NotificationStatus.SIMULATED.value,
+                NotificationStatus.DELIVERED.value,
+            }:
+                logger.debug(f"{period.capitalize()} digest for {key_str} already sent/simulated; skipping duplicate.")
+                return None
 
-        subject = f"JobPilot AI Digest: {len(matches)} New Eligible Job Matches ({today_str})"
+        subject = f"JobPilot AI {period.capitalize()} Digest: {len(matches)} New Eligible Job Matches ({key_str})"
         lines = [
             f"Hello {candidate.full_name},\n",
-            f"Here is your JobPilot AI opportunity digest for {today_str}:\n",
+            f"Here is your JobPilot AI {period} opportunity digest for {key_str}:\n",
         ]
-        for idx, (job, score) in enumerate(matches[:10], start=1):
+        for idx, (job, score) in enumerate(matches[:15], start=1):
             lines.append(f"{idx}. {job.title} at {job.company} — {score.overall_score:.0f}% Match")
             lines.append(f"   Location: {job.location} | Remote: {job.remote_type}")
             lines.append(f"   Link: {job.canonical_url}\n")
 
-        lines.append("Open your local JobPilot dashboard to prepare and review applications:")
+        lines.append("Open your local JobPilot dashboard to prepare, review, and approve applications:")
         lines.append("http://localhost:5173/jobs\n\n— JobPilot AI")
 
         body = "\n".join(lines)
-        success, err_msg = await cls.send_email(to_email=recipient, subject=subject, body_text=body)
+        delivery_res = await cls.send_email(to_email=recipient, subject=subject, body_text=body)
+        if isinstance(delivery_res, tuple):
+            s_ok, s_msg = delivery_res
+            delivery_res = EmailDeliveryResult(
+                success=s_ok,
+                status=NotificationStatus.SENT if s_ok else NotificationStatus.FAILED,
+                status_detail=str(s_msg),
+                error=None if s_ok else str(s_msg),
+                is_simulated=False,
+                attempts=[{"attempt": 1, "timestamp": datetime.now(timezone.utc).isoformat(), "status": "SENT" if s_ok else "FAILED", "detail": str(s_msg)}],
+            )
 
-        notif = Notification(
+        notif = existing_notif or Notification(
             title=subject,
             message=body,
-            notification_type=NotificationType.NEW_MATCH.value,
+            notification_type=NotificationType.DIGEST.value,
             channel=NotificationChannel.EMAIL.value,
-            status=NotificationStatus.DELIVERED.value if success else NotificationStatus.FAILED.value,
+            status=delivery_res.status.value,
             is_read=True,
             is_dismissed=False,
             dedup_key=dedup_key,
-            metadata_json={
-                "recipient": recipient,
-                "matches_count": len(matches),
-                "delivered": success,
-                "error": err_msg,
-                "sent_at": datetime.now(timezone.utc).isoformat(),
-            },
+            metadata_json={},
         )
+
+        notif.status = delivery_res.status.value
+        notif.metadata_json = {
+            "recipient": recipient,
+            "period": period,
+            "period_key": key_str,
+            "matches_count": len(matches),
+            "job_ids": [j.id for j, _ in matches],
+            "provider": settings.EMAIL_PROVIDER,
+            "delivery_status": delivery_res.status.value,
+            "status_detail": delivery_res.status_detail,
+            "is_simulated": delivery_res.is_simulated,
+            "attempts": delivery_res.attempts,
+            "attempt_count": len(delivery_res.attempts),
+            "error": delivery_res.error,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        }
+
         session.add(notif)
         await session.commit()
         await session.refresh(notif)
         return notif
 
     @classmethod
-    async def send_test_email(cls, recipient: str) -> Tuple[bool, str]:
+    async def send_test_email(cls, recipient: str) -> Tuple[bool, str, NotificationStatus]:
         """Safe test-delivery workflow that does not contact real employers."""
         subject = "JobPilot AI: Test Alert Verification"
         body = (
@@ -271,7 +459,7 @@ class EmailService:
             "Real employer job application submissions remain disabled (JOBPILOT_REAL_SUBMISSION_ENABLED=False).\n\n"
             "— JobPilot AI"
         )
-        success, err = await cls.send_email(to_email=recipient, subject=subject, body_text=body)
-        if success:
-            return True, f"Test email successfully dispatched to {recipient} via {settings.EMAIL_PROVIDER}."
-        return False, f"Test email delivery failed: {err}"
+        res = await cls.send_email(to_email=recipient, subject=subject, body_text=body)
+        if res.success:
+            return True, f"Test alert successfully processed: {res.status_detail} via {settings.EMAIL_PROVIDER}.", res.status
+        return False, f"Test email delivery failed: {res.error}", res.status

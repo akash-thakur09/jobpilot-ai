@@ -26,6 +26,7 @@ class SchedulerService:
     _is_enabled: bool = settings.SCHEDULER_ENABLED
     _interval_minutes: int = settings.DISCOVERY_INTERVAL_MINUTES
     _job_id: str = "scheduled_job_discovery"
+    _digest_job_id: str = "scheduled_job_digest"
 
     @classmethod
     def get_scheduler(cls) -> AsyncIOScheduler:
@@ -55,6 +56,16 @@ class SchedulerService:
             await cls.execute_discovery(trigger="scheduled")
         except Exception as exc:
             logger.error(f"Error during scheduled job discovery: {exc}", exc_info=True)
+
+    @classmethod
+    async def scheduled_digest_job(cls):
+        """Job function executed periodically by APScheduler to process scheduled digests."""
+        logger.info("Scheduler triggered automated digest processing.")
+        try:
+            from backend.app.services.digest_service import DigestService
+            await DigestService.process_all_scheduled_digests()
+        except Exception as exc:
+            logger.error(f"Error during scheduled digest processing: {exc}", exc_info=True)
 
     @classmethod
     async def recover_stale_runs(cls, session: Optional[Any] = None) -> int:
@@ -114,6 +125,19 @@ class SchedulerService:
             coalesce=True,
         )
 
+        if scheduler.get_job(cls._digest_job_id):
+            scheduler.remove_job(cls._digest_job_id)
+
+        scheduler.add_job(
+            cls.scheduled_digest_job,
+            trigger=IntervalTrigger(minutes=15),
+            id=cls._digest_job_id,
+            name="JobPilot Scheduled Digest",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
         if cls._is_enabled:
             if not scheduler.running:
                 scheduler.start()
@@ -142,6 +166,9 @@ class SchedulerService:
             job = scheduler.get_job(cls._job_id)
             if job and job.next_run_time is None:
                 job.resume()
+            d_job = scheduler.get_job(cls._digest_job_id)
+            if d_job and d_job.next_run_time is None:
+                d_job.resume()
 
         logger.info("Scheduler enabled.")
         return await cls.get_status()
@@ -155,6 +182,9 @@ class SchedulerService:
         job = scheduler.get_job(cls._job_id)
         if job and scheduler.running:
             job.pause()
+        d_job = scheduler.get_job(cls._digest_job_id)
+        if d_job and scheduler.running:
+            d_job.pause()
 
         logger.info("Scheduler disabled.")
         return await cls.get_status()
