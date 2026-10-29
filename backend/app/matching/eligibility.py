@@ -63,7 +63,9 @@ class EligibilityService:
 
         us_citizen_patterns = [
             "must be a us citizen",
+            "must be us citizen",
             "u.s. citizen only",
+            "us citizen only",
             "us citizenship required",
             "citizenship required",
             "active security clearance required",
@@ -71,7 +73,20 @@ class EligibilityService:
         ]
 
         demands_us_citizenship = any(p in desc_lower for p in us_citizen_patterns)
-        is_candidate_us_citizen = "citizen" in candidate_auth or "us citizen" in candidate_auth
+        if hasattr(job, "requirements") and job.requirements:
+            for r in job.requirements:
+                if getattr(r, "requirement_type", None) in ("WORK_AUTH", "CITIZENSHIP"):
+                    val = (getattr(r, "value", None) or "").lower()
+                    if any(p in val for p in ["us citizen", "u.s. citizen", "citizenship"]):
+                        demands_us_citizenship = True
+        us_citizen_indicators = [
+            "us citizen",
+            "u.s. citizen",
+            "us_citizen",
+            "united states citizen",
+            "american citizen",
+        ]
+        is_candidate_us_citizen = any(ind in candidate_auth for ind in us_citizen_indicators)
 
         if demands_us_citizenship:
             if not is_candidate_us_citizen:

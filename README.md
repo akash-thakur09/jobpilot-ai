@@ -8,10 +8,13 @@ JobPilot AI is a local-first, privacy-focused personal AI job-hunting agent. It 
 
 - **Local-First & Privacy Preserving**: Candidate data, generated resumes, and AI inference run locally on your machine via Ollama (`llama3.1`).
 - **Factually Grounded Resumes**: Zero hallucination policy. Resumes only highlight verified skills, achievements, and career history without inventing qualifications.
-- **Explainable Match Scoring**: Deterministic rules for mandatory eligibility combined with weighted scoring for skills, experience, and remote/location preferences.
+- **Explainable Match Scoring**: Deterministic rules for mandatory eligibility combined with weighted scoring for skills, experience, and remote/location preferences (Scoring Policy Version 1.1.0).
+- **Conservative Duplicate Detection**: Multi-signal cross-source duplicate clustering with location preservation and manual review controls.
+- **Authoritative Freshness Tracking**: Source-authoritative status tracking (Active, Potentially Stale, Confirmed Closed, Unknown) with live probe verification.
+- **Candidate Feedback Loop**: Deterministic score adjustments from user feedback (Relevant, Not Relevant, Already Applied, Not Interested, Duplicate).
 - **Immutable Application History**: Every submitted application preserves the exact resume version, PDF file, and SHA-256 checksum used at submission time.
-- **Safe Browser Automation**: Uses Playwright for form filling and resume uploading, strictly enforcing human approval before final submission.
-- **Multi-Source Job Discovery**: Adapters for public APIs, company career pages (Greenhouse, Lever), and scheduled discovery.
+- **Safe Browser Automation**: Uses Playwright for form filling and resume uploading, strictly enforcing human approval and blocking real submissions by default.
+- **Multi-Source Job Discovery**: Adapters for public APIs, company career pages (Greenhouse, Lever), and scheduled discovery with rate limiting and error isolation.
 
 ---
 
@@ -21,7 +24,7 @@ JobPilot AI is a local-first, privacy-focused personal AI job-hunting agent. It 
 - **Python 3.12+**
 - **Node.js 20+** & **npm**
 - **Ollama** with `llama3.1:latest` (`ollama run llama3.1`)
-- **Docker** (optional, for containerized PostgreSQL) or local PostgreSQL / SQLite for lightweight development
+- **Docker** (optional, for containerized PostgreSQL) or local SQLite for lightweight local development
 
 ### 1. Clone & Configure
 ```bash
@@ -31,21 +34,21 @@ cp .env.example .env
 ```
 
 ### 2. Backend Setup
-```bash
+```powershell
 cd backend
 python -m venv .venv
 # On Windows:
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 # On Linux/macOS:
 # source .venv/bin/activate
 
 pip install -r requirements.txt
 alembic upgrade head
-uvicorn app.main:app --reload --port 8000
+python run.py
 ```
 
 ### 3. Frontend Setup
-```bash
+```powershell
 cd ../frontend
 npm install
 npm run dev
@@ -55,89 +58,95 @@ The frontend will be available at `http://localhost:5173` and the backend API do
 
 ---
 
-## Core API Endpoints (v1)
+## Environment Variables & Safe Defaults
 
-### Candidate Profile
-- `GET /api/v1/profile` — Retrieve current verified candidate profile
-- `POST /api/v1/profile` — Create candidate profile
-- `PATCH /api/v1/profile` — Update candidate profile fields
-- `POST /api/v1/profile/skills` — Add verified technical or soft skill
-- `DELETE /api/v1/profile/skills/{skill_id}` — Delete skill
-- `POST /api/v1/profile/experiences` — Add employment history
-- `POST /api/v1/profile/educations` — Add education record
-- `POST /api/v1/profile/projects` — Add demonstrable project
-- `POST /api/v1/profile/import-resume` — Upload & extract master PDF resume into unverified review draft
-- `POST /api/v1/profile/import-resume/confirm` — Confirm and save draft as verified profile
+The application strictly validates configuration upon startup (`validate_startup_configuration`).
 
-### Job Discovery & Management
-- `GET /api/v1/jobs` — List jobs with search, company/remote filters, and pagination
-- `GET /api/v1/jobs/{job_id}` — Retrieve full job details and requirements
-- `GET /api/v1/jobs/sources` — List registered discovery sources and their health
-- `POST /api/v1/jobs/discover` — Trigger job discovery for `synthetic`, `greenhouse`, or `lever`
-
-### Job Matching & Scoring
-- `POST /api/v1/matching/evaluate/{job_id}` — Evaluate a single job against the candidate profile
-- `POST /api/v1/matching/evaluate-all` — Batch-evaluate all discovered jobs
-- `GET /api/v1/matching/results` — List match evaluations (with `is_eligible`, `min_score`, pagination)
-- `GET /api/v1/matching/results/{job_id}` — Get latest match score and breakdown for a job
-- `GET /api/v1/matching/health` — Check matching engine and Ollama AI provider status
-
-### Resume Tailoring & Versioning (Phase 4)
-- `POST /api/v1/resumes/generate` — Generate tailored ATS PDF resume for an eligible job (fact validation gate, atomic SHA-256 storage)
-- `GET /api/v1/resumes/{version_id}` — Get resume version metadata, validation reports, keyword coverage, and candidate snapshot
-- `GET /api/v1/resumes/job/{job_id}` — List all historical generated resume versions for a specific job
-- `GET /api/v1/resumes/{version_id}/download` — Stream exact immutable PDF file with cache headers and filename
-### Application Workflow & Browser Automation (Phase 5)
-- `POST /api/v1/applications/prepare` — Prepare candidate application package, trigger resume generation, calculate canonical approval fingerprint
-- `GET /api/v1/applications` — List applications with status and candidate filters
-- `GET /api/v1/applications/{id}` — Get single application review package
-- `GET /api/v1/applications/{id}/review` — Inspect candidate data snapshot, resume checksum, and approval readiness
-- `POST /api/v1/applications/{id}/approve` — Human approval gate with canonical fingerprint validation
-- `POST /api/v1/applications/{id}/attempt` — Execute synthetic browser automation runner
-- `GET /api/v1/applications/{id}/events` — Application append-only lifecycle event log
-- `GET /api/v1/applications/{id}/attempts` — Complete execution attempts history
-- `POST /api/v1/applications/{id}/reconcile` — Manual outcome reconciliation
-
-### Scheduled Discovery & Automation Runs (Phase 7)
-- `GET /api/v1/scheduler/status` — Get scheduler state, running status, interval, next tick, and latest run telemetry
-- `POST /api/v1/scheduler/config` — Update scheduler configuration (enable/disable, discovery interval)
-- `POST /api/v1/scheduler/run` — Manually trigger immediate 12-stage discovery and matching pipeline
-- `GET /api/v1/scheduler/runs` — List discovery run history with pagination and status filters
-- `GET /api/v1/scheduler/runs/{id}` — Inspect specific run and sanitized source diagnostics
-
-### Persistent In-App Notifications (Phase 7)
-- `GET /api/v1/notifications` — List notifications with read/dismissed state filtering and pagination
-- `GET /api/v1/notifications/unread-count` — Get count of active unread notifications
-- `POST /api/v1/notifications/{id}/read` — Mark notification as read
-- `POST /api/v1/notifications/read-all` — Mark all unread notifications as read
-- `POST /api/v1/notifications/{id}/dismiss` — Dismiss notification from active view
+| Variable | Default | Purpose / Safety Rule |
+| :--- | :--- | :--- |
+| `APP_HOST` | `127.0.0.1` | Local loopback binding. Non-localhost bindings log security warnings. |
+| `APP_PORT` | `8000` | Backend API server port. |
+| `CORS_ORIGINS` | `["http://localhost:5173", "http://127.0.0.1:5173"]` | Allowed frontend origins. |
+| `JOBPILOT_REAL_SUBMISSION_ENABLED` | `False` | **CRITICAL SAFETY BOUNDARY**. Real external submissions are disabled by default. Automatically enforced to `False` on local start. |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./jobpilot.db` | Async SQLAlchemy database URI. |
+| `RESUME_STORAGE_DIR` | `./storage/resumes` | Directory for immutable resume PDFs with atomic SHA-256 naming. |
+| `SCREENSHOT_STORAGE_DIR` | `./storage/screenshots` | Directory for submission audit screenshots. |
+| `SCHEDULER_ENABLED` | `True` | Background discovery scheduler enable flag. |
+| `EMAIL_ENABLED` | `False` | SMTP notification delivery enable flag. Falls back to mock logger when False. |
+| `SMTP_HOST` | `""` | Outbound SMTP server hostname. |
+| `SMTP_PORT` | `587` | SMTP port (587 STARTTLS / 465 SSL). |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama inference URL. |
+| `OLLAMA_MODEL` | `llama3.1:latest` | Local LLM model tag. |
 
 ---
 
-## Scheduler Architecture, Recovery & Operational Guarantees
+## Supported Source Configuration & Rate Limits
 
-1. **Unified Pipeline**: Manual and scheduled discovery execute the exact same 12-stage pipeline (`DiscoveryMatchingPipeline.execute`) with rate limiting, error isolation, deterministic eligibility, scoring, and persistent notification generation.
-2. **Process Concurrency Lock**: In-memory `asyncio.Lock` prevents overlapping discovery runs within a single instance.
-3. **Single-Scheduler Deployment**: Supported deployments run a single scheduler instance. The concurrency lock coordinates work strictly within a single Python process; multi-worker processes (e.g. `gunicorn -w 4` or multiple `uvicorn` instances) without external distributed locks must run with `SCHEDULER_ENABLED=false` on all but one designated worker.
-4. **Crash and Restart Recovery**: If the application process terminates abruptly while a discovery run is executing, `SchedulerService.start()` automatically detects orphaned `RUNNING` discovery records on restart and transitions them to `FAILED` with sanitized error summaries (`"Interrupted by process termination or restart"`).
-5. **Missed Run Coalescence**: If the system is offline during scheduled ticks, missed intervals coalesce safely without queue bombardment. The next tick triggers at `now() + interval_minutes`.
-6. **Non-Negotiable Safety**: Scheduled runs perform job fetching and matching **ONLY**. Applications are **never** prepared, approved, or submitted by background tasks. `JOBPILOT_REAL_SUBMISSION_ENABLED=false` remains enforced by default.
+JobPilot AI supports public, read-only career board APIs. It never submits applications or crawls arbitrary websites during discovery.
+
+### Supported Adapters
+1. **Synthetic (`synthetic`)**:
+   - Built-in offline testing fixture emitting diverse job listings (remote Python, senior backend, disqualified, etc.) without network access.
+   - Config JSON: `{"count": 5, "company_name": "AcmeCorp"}`.
+2. **Greenhouse (`greenhouse`)**:
+   - Public board API: `https://boards-api.greenhouse.io/v1/boards/{token}/jobs`.
+   - Site/Board Token: Specify the company board token (e.g. `{"token": "stripe"}`).
+   - Rate Limits: 30 requests/min default with HTTP 429 detection and `Retry-After` header backoff.
+   - Pagination: `limit` parameter supported.
+   - Single-Job Probe: Checks `https://boards-api.greenhouse.io/v1/boards/{token}/jobs/{job_id}` for active vs 404/closed status.
+3. **Lever (`lever`)**:
+   - Public postings API: `https://api.lever.co/v0/postings/{token}`.
+   - Site/Board Token: Specify the company board token (e.g. `{"token": "netflix"}`).
+   - Rate Limits: 30 requests/min default with HTTP 429 detection and backoff.
+   - Pagination: Native `limit` parameter supported.
+   - Single-Job Probe: Probes `https://api.lever.co/v0/postings/{token}/{job_id}`.
+
+### Source Failure Isolation
+- Discovery runs execute with source-level error isolation (`DiscoveryMatchingPipeline`).
+- If one source fails (HTTP 429 rate limit, 500 server error, network timeout), other sources proceed normally.
+- Runs record status: `COMPLETED` (all succeeded), `PARTIAL_SUCCESS` (some succeeded), or `FAILED` (all failed).
+- Diagnostics are sanitized to prevent credential or internal trace leakage.
+- Source outages or network timeouts **never** mark existing listings as closed.
 
 ---
 
-## Supported Job Discovery Sources
+## Live Status & Freshness Verification
 
-- `synthetic`: Local mock adapter providing verified test listings (Remote Python, Senior Backend, Fullstack, Disqualified Frontend) for automated end-to-end testing without external network dependencies.
-- `greenhouse`: Real public Greenhouse job boards (e.g. `https://boards-api.greenhouse.io/v1/boards/{token}/jobs`).
-- `lever`: Real public Lever job boards (e.g. `https://api.lever.co/v0/postings/{token}`).
+- **Automatic Staleness**: Jobs unseen for > 30 days without authoritative re-discovery transition to `POTENTIALLY_STALE`.
+- **Authoritative Closure**: Only authoritative closure signals (e.g. HTTP 404 from single-job API probe) transition jobs to `CONFIRMED_CLOSED`.
+- **Live Probe Verification**:
+  - API endpoint: `POST /api/v1/jobs/{job_id}/freshness/verify`.
+  - Frontend: "Verify Live Status" button in `JobDetailModal`.
+  - If a source adapter is unreachable or encounters network failure during a probe, status is recorded as `UNKNOWN` rather than claiming success.
 
 ---
 
-## Inspecting Runs and Diagnostics
+## Cross-Source Duplicate Detection & Feedback
 
-- Run history and telemetry can be inspected via `GET /api/v1/scheduler/runs` and `GET /api/v1/scheduler/runs/{run_id}` or directly in the frontend Scheduler Dashboard.
-- When a discovery run encounters partial or total failure, errors are sanitized to redact credentials, tokens, or system traces before persistence.
-- Notifications of type `RUN_FAILED` or `RUN_WARNING` are automatically generated and linked to the run record for immediate triage.
+- **Staged Duplicate Detection**:
+  1. Exact canonical URL matching.
+  2. Employer token and normalized job title blocking.
+  3. Multi-signal similarity scoring (company token overlap, title fuzzy match, remote compatibility, description Jaccard overlap).
+- **Physical Location Protection**: Separate physical vacancies in different cities apply a -0.35 deduction, preventing false merges.
+- **Non-Destructive Clustering**: Both source records, original URLs, and application histories are preserved in `JobDuplicateCluster`.
+- **Review Workflow**: Users can review duplicates via `GET /api/v1/jobs/duplicates` and `POST /api/v1/jobs/duplicates/{id}/review` (CONFIRM or DISMISS).
+- **User Feedback**:
+  - Feedback types: `RELEVANT`, `NOT_RELEVANT`, `ALREADY_APPLIED`, `NOT_INTERESTED`, `DUPLICATE_LISTING`.
+  - Applied exactly once per match evaluation.
+  - **Deterministic Rule**: Hard eligibility disqualification (e.g. mandatory citizenship) **always** wins and cannot be overridden by user feedback.
+
+---
+
+## Scheduler Architecture, Recovery & Multi-Process Limits
+
+1. **Single-Scheduler Process Model**:
+   - APScheduler runs as an in-process `AsyncIOScheduler` within the FastAPI lifespan.
+   - Discovery concurrency is governed by an in-memory `asyncio.Lock` preventing overlapping runs.
+   - **Multi-Process Limitation**: Running multiple worker processes (e.g. `gunicorn -w 4` or multiple `uvicorn` instances) without external distributed locks is not supported with the scheduler enabled. Run with a single process or set `SCHEDULER_ENABLED=false` on all worker processes except one designated scheduler worker.
+2. **Crash & Restart Recovery**:
+   - If the application process terminates abruptly during discovery, `SchedulerService.start()` detects orphaned `RUNNING` discovery runs upon restart and transitions them to `FAILED` with sanitized error summaries (`"Interrupted by process termination or restart"`).
+3. **Missed Run Coalescence**:
+   - If the system is offline during scheduled ticks, missed intervals coalesce safely without queue bombardment. The next tick triggers at `now() + interval_minutes`.
 
 ---
 
@@ -156,46 +165,68 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
-Current head revision: `4b81cf738a92` (adds persistent notifications table with deduplication keys and cascade-null references to jobs and automation runs).
+- **Current Alembic Head**: `e145f6789abc`
+  - Revises: `d934b51c8a2f`
+  - Adds database indexes on `jobs.canonical_url` and `jobs.discovered_at` for high-performance deduplication and filtering.
 
 ---
 
-## Verified Local Startup Commands
+## Offline Ranking Evaluation
 
-### Start Backend
+JobPilot AI includes an offline recommendation and ranking benchmark framework:
+
 ```powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-# Recommended local development runner (binds strictly to loopback 127.0.0.1):
-python run.py
+backend\.venv\Scripts\python.exe backend/evaluation/run_ranking_eval.py
 ```
 
-### Start Frontend
-```powershell
-cd frontend
-npm run dev
-```
+### Metrics & Benchmark Performance
+- **Dataset**: 12 diverse synthetic fixtures across strong matches, weak matches, disqualified postings, stale listings, and duplicate pairs.
+- **Precision@3**: `1.0000`
+- **Precision@5**: `0.8000`
+- **NDCG@3**: `1.0000`
+- **NDCG@5**: `0.9178`
+- **Duplicate Detection F1**: `1.0000` (Precision: 1.0, Recall: 1.0)
+- **Freshness Classification Accuracy**: `1.0000`
+- Output: Persisted to `storage/evaluation_results.json`.
 
-### Run Full Test Suites
+*Limitation Note*: Offline ranking evaluation uses static benchmark fixtures. Production ranking should be evaluated against real user interaction volumes over time.
+
+---
+
+## Operational Security & Safe Local Deployment
+
+1. **Localhost Binding Default**: The backend binds strictly to `127.0.0.1` by default.
+2. **Public Exposure Warning**: JobPilot AI is designed for local-first single-user personal use. Exposing the backend or frontend to public networks requires an appropriate authentication layer, TLS reverse proxy, and network firewalls.
+3. **Secret Protection**: API tokens, database credentials, and email credentials remain in local `.env` and are never committed or exposed to frontend bundles.
+4. **Sanitized Diagnostics**: Application error responses redact system stack traces and candidate sensitive details.
+5. **Resume Integrity**: Uploaded resumes and tailored PDF artifacts are validated for file size, MIME type, and bit-for-bit SHA-256 integrity before use.
+6. **Immutable Historical Records**: Applications and generated resume versions cannot be mutated once created.
+
+---
+
+## Verified Test Suites
+
+### Backend Tests (175 passed tests across 25 modules)
 ```powershell
-# Backend Suite (130 tests):
 cd backend
 .\.venv\Scripts\pytest.exe -v
-
-# Resume Integrity Acceptance Suite (7 tests):
-.\.venv\Scripts\pytest.exe tests\acceptance\test_resume_version_integrity.py -v
-
-# Frontend Suite (27 Vitest tests) & Production Build:
-cd frontend
-npx vitest run
-npm run build
 ```
 
----
+### Acceptance & Regression Suites
+```powershell
+# Phase 12 Live Adapters, Data Quality, and E2E Flow:
+.\.venv\Scripts\pytest.exe tests\test_live_sources_and_adapters.py tests\test_data_quality_and_ranking_regressions.py tests\test_production_readiness_e2e.py -v
 
-## Documentation
-- [Project Specification](docs/PROJECT_SPEC.md)
-- [Development Progress Checklist](docs/DEVELOPMENT_PROGRESS.md)
+# Resume Integrity Acceptance Suite:
+.\.venv\Scripts\pytest.exe tests\acceptance\test_resume_version_integrity.py -v
+```
+
+### Frontend Tests (41 passed Vitest tests) & Build
+```powershell
+cd frontend
+npm run test
+npm run build
+```
 
 ---
 

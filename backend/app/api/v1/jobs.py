@@ -108,10 +108,12 @@ from backend.app.schemas.job import (
     JobFeedbackCreate,
     JobFeedbackRead,
     JobFreshnessRead,
+    JobFreshnessVerifyResponse,
 )
 from backend.app.services.job_discovery_service import JobDiscoveryService
 from backend.app.services.duplicate_detection_service import DuplicateDetectionService
 from backend.app.services.feedback_service import FeedbackService
+from backend.app.services.job_freshness_service import JobFreshnessService
 from sqlalchemy.orm import selectinload
 
 
@@ -172,6 +174,28 @@ async def get_job_freshness(job_id: str, session: AsyncSession = Depends(get_db)
         last_verified_at=job.last_verified_at,
         posted_at=job.posted_at,
     )
+
+
+@router.post("/{job_id}/freshness/verify", response_model=JobFreshnessVerifyResponse)
+async def verify_job_freshness_live(job_id: str, session: AsyncSession = Depends(get_db)):
+    """Probes the live source adapter on-demand to authoritatively verify job freshness."""
+    res = await session.execute(select(Job).where(Job.id == job_id))
+    job = res.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+
+    updated_job = await JobFreshnessService.verify_job_live_status(session, job)
+    await session.commit()
+    await session.refresh(updated_job)
+
+    return JobFreshnessVerifyResponse(
+        job_id=updated_job.id,
+        freshness_status=updated_job.freshness_status,
+        freshness_reason=updated_job.freshness_reason,
+        last_verified_at=updated_job.last_verified_at,
+        verified_live=True,
+    )
+
 
 
 @router.post("/{job_id}/feedback", response_model=JobFeedbackRead)

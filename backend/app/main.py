@@ -13,7 +13,8 @@ from backend.app.db.session import engine
 async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
     logger.info("Initializing JobPilot AI Backend...")
-    settings.setup_directories()
+    settings.validate_startup_configuration()
+
 
     # Create tables if using SQLite or test engine
     if "sqlite" in settings.DATABASE_URL:

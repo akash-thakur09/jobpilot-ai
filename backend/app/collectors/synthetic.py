@@ -71,6 +71,14 @@ class SyntheticJobAdapter(BaseJobSourceAdapter):
             )
         return results
 
+    async def check_job_status(self, external_id: str, **kwargs) -> Optional[str]:
+        """Probes status of synthetic job."""
+        if "closed" in external_id:
+            return "CONFIRMED_CLOSED"
+        if "unknown" in external_id:
+            return None
+        return "ACTIVE"
+
     def normalize(self, raw: RawJobData) -> NormalizedJob:
         p = raw.payload
         remote_str = p.get("remote_type", RemoteType.REMOTE.value)
@@ -78,6 +86,8 @@ class SyntheticJobAdapter(BaseJobSourceAdapter):
             remote_type = RemoteType(remote_str)
         except ValueError:
             remote_type = RemoteType.UNKNOWN
+
+        posted_at = p.get("posted_at")
 
         return NormalizedJob(
             source_identifier=self.source_identifier,
@@ -92,5 +102,7 @@ class SyntheticJobAdapter(BaseJobSourceAdapter):
             salary_min=p.get("salary_min"),
             salary_max=p.get("salary_max"),
             currency=p.get("currency", "USD"),
+            posted_at=posted_at,
             raw_payload=p,
         )
+

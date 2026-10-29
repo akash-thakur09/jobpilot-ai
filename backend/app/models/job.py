@@ -67,7 +67,7 @@ class Job(Base, TimestampMixin):
     external_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     company: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    canonical_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    canonical_url: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
     location: Mapped[str] = mapped_column(String(255), nullable=False, default="Remote")
     remote_type: Mapped[str] = mapped_column(String(50), nullable=False, default=RemoteType.REMOTE.value)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -77,8 +77,9 @@ class Job(Base, TimestampMixin):
     currency: Mapped[Optional[str]] = mapped_column(String(10), nullable=True, default="USD")
     status: Mapped[str] = mapped_column(String(50), nullable=False, default=JobStatus.DISCOVERED.value)
     discovered_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True
     )
+
     raw_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Freshness & lifecycle

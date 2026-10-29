@@ -127,3 +127,44 @@ class JobFreshnessService:
         if job.freshness_status == FreshnessStatus.UNKNOWN.value:
             return f"Freshness verification unknown ({job.freshness_reason or 'Source verification pending'})."
         return None
+
+    @classmethod
+    async def verify_job_live_status(
+        cls, session: AsyncSession, job: Job, timeout_seconds: float = 5.0
+    ) -> Job:
+        """
+        Probes the source adapter live for an individual job's status.
+        Transitions job freshness based on authoritative signals:
+        - If confirmed closed (404/closed): marks CONFIRMED_CLOSED.
+        - If confirmed active (200/open): marks ACTIVE.
+        - If network failure, timeout, or rate limited: marks UNKNOWN without closing.
+        """
+        source_res = await session.execute(select(JobSource).where(JobSource.id == job.source_id))
+        source = source_res.scalar_one_or_none()
+        if not source:
+            return await cls.mark_job_unknown(session, job, "Unknown source configuration")
+
+        from backend.app.collectors import get_adapter
+        try:
+            adapter = get_adapter(source.identifier)
+        except Exception as e:
+            return await cls.mark_job_unknown(session, job, f"Adapter error: {e}")
+
+        config = dict(source.config_json or {})
+        try:
+            status_result = await adapter.check_job_status(
+                external_id=job.external_id,
+                timeout_seconds=timeout_seconds,
+                **config,
+            )
+        except Exception as probe_err:
+            logger.warning(f"Live status probe failed for job {job.id}: {probe_err}")
+            status_result = None
+
+        if status_result == "CONFIRMED_CLOSED":
+            return await cls.mark_job_closed(session, job, f"Authoritatively confirmed closed by {source.name} (404/inactive)")
+        elif status_result == "ACTIVE":
+            return await cls.mark_job_verified_active(session, job)
+        else:
+            return await cls.mark_job_unknown(session, job, f"Live verification probe unavailable or timed out on {source.name}")
+

@@ -31,6 +31,13 @@ class NormalizedJob(BaseModel):
     raw_payload: Optional[Dict[str, Any]] = None
 
 
+class SourceRateLimitException(Exception):
+    """Raised when an external job board endpoint returns HTTP 429 Too Many Requests."""
+    def __init__(self, message: str, retry_after_seconds: Optional[int] = None):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
 class BaseJobSourceAdapter(ABC):
     """
     Abstract base class for all job source adapters.
@@ -70,3 +77,14 @@ class BaseJobSourceAdapter(ABC):
     def normalize(self, raw: RawJobData) -> NormalizedJob:
         """Transforms a raw provider payload into the normalized job schema."""
         pass
+
+    async def check_job_status(self, external_id: str, **kwargs) -> Optional[str]:
+        """
+        Optional source-specific check for an individual job's status.
+        Returns:
+            'ACTIVE': Listing confirmed actively open by source.
+            'CONFIRMED_CLOSED': Listing confirmed closed or not found (e.g. 404).
+            None: Status cannot be verified due to network error, timeout, or rate limit.
+        """
+        return None
+

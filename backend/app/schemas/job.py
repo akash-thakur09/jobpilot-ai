@@ -117,6 +117,15 @@ class JobFreshnessRead(BaseModel):
     posted_at: Optional[datetime] = None
 
 
+class JobFreshnessVerifyResponse(BaseModel):
+    job_id: str
+    freshness_status: str
+    freshness_reason: Optional[str] = None
+    last_verified_at: Optional[datetime] = None
+    verified_live: bool
+
+
+
 class JobDiscoveryRequest(BaseModel):
     source_identifier: str = Field(..., description="e.g. 'synthetic', 'greenhouse', 'lever'")
     board_token: Optional[str] = Field(None, description="Employer token for Greenhouse (e.g. 'stripe')")

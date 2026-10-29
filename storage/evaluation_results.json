@@ -2,7 +2,7 @@
   "evaluation_dataset_version": "1.1.0",
   "dataset_size": 12,
   "scoring_policy_version": "1.1.0",
-  "evaluated_at": "2026-10-28T09:42:43.920801+00:00",
+  "evaluated_at": "2026-10-29T06:54:45.517697+00:00",
   "metrics": {
     "ranking": {
       "precision_at_3": 1.0,

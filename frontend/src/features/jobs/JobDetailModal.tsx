@@ -83,6 +83,32 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
     }
   };
 
+  const [freshnessStatus, setFreshnessStatus] = useState<string>(job?.freshness_status || 'ACTIVE');
+  const [freshnessReason, setFreshnessReason] = useState<string | null | undefined>(job?.freshness_reason);
+  const [isVerifyingFreshness, setIsVerifyingFreshness] = useState(false);
+
+  useEffect(() => {
+    if (job) {
+      setFreshnessStatus(job.freshness_status || 'ACTIVE');
+      setFreshnessReason(job.freshness_reason);
+    }
+  }, [job?.id]);
+
+
+  const handleVerifyFreshness = async () => {
+    if (!job) return;
+    setIsVerifyingFreshness(true);
+    try {
+      const res = await api.jobs.verifyFreshness(job.id);
+      setFreshnessStatus(res.freshness_status);
+      if (res.freshness_reason) setFreshnessReason(res.freshness_reason);
+    } catch (err) {
+      console.error('Failed to verify live freshness', err);
+    } finally {
+      setIsVerifyingFreshness(false);
+    }
+  };
+
   const getFreshnessBadge = (status?: string) => {
     switch (status) {
       case 'ACTIVE':
@@ -95,6 +121,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
         return <Badge variant="default" size="sm">Verification Pending</Badge>;
     }
   };
+
 
   const breakdown = matchResult?.scoring_breakdown;
 
@@ -163,8 +190,11 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
             <div className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-xs text-slate-400">Freshness:</span>
-              {getFreshnessBadge(job.freshness_status)}
+              {getFreshnessBadge(freshnessStatus)}
             </div>
+            {freshnessReason && (
+              <span className="text-[11px] text-slate-400 italic">({freshnessReason})</span>
+            )}
             {job.duplicate_cluster_id && (
               <div className="flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-purple-400" />
@@ -172,12 +202,24 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
               </div>
             )}
           </div>
-          {job.last_seen_at && (
-            <div className="text-[11px] text-slate-500 font-mono">
-              Last Verified: {new Date(job.last_seen_at).toLocaleDateString()}
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {job.last_seen_at && (
+              <div className="text-[11px] text-slate-500 font-mono">
+                Verified: {new Date(job.last_seen_at).toLocaleDateString()}
+              </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleVerifyFreshness}
+              isLoading={isVerifyingFreshness}
+              className="text-xs py-1 px-2.5 h-7"
+            >
+              Verify Live Status
+            </Button>
+          </div>
         </div>
+
 
         {/* User Recommendation Feedback Controls */}
         <div className="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-2">

@@ -92,6 +92,42 @@ class Settings(BaseSettings):
         self.MASTER_RESUME_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
         self.SCREENSHOT_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
+    def validate_startup_configuration(self) -> None:
+        """
+        Validates system settings at startup to ensure operational safety and security.
+        Enforces local-only bindings, disabled real submissions, and safe email defaults.
+        """
+        import logging
+        cfg_logger = logging.getLogger("jobpilot.config")
+
+        # 1. Enforce real submission disabled
+        if self.JOBPILOT_REAL_SUBMISSION_ENABLED:
+            cfg_logger.critical(
+                "CRITICAL WARNING: JOBPILOT_REAL_SUBMISSION_ENABLED is set to TRUE. "
+                "Automated external job submissions must remain DISABLED in this build."
+            )
+            # Re-enforce safety
+            self.JOBPILOT_REAL_SUBMISSION_ENABLED = False
+
+        # 2. Local-first binding warning
+        if self.APP_HOST not in ("127.0.0.1", "localhost"):
+            cfg_logger.warning(
+                f"SECURITY NOTICE: APP_HOST is set to '{self.APP_HOST}'. "
+                "JobPilot AI is architected as a local-first application without public authentication. "
+                "Exposing this server on public interfaces requires an appropriate security and reverse-proxy authentication layer."
+            )
+
+        # 3. Email configuration validation
+        if self.EMAIL_NOTIFICATIONS_ENABLED and self.EMAIL_PROVIDER == "smtp":
+            if not self.EMAIL_HOST or self.EMAIL_HOST == "localhost":
+                cfg_logger.warning("EMAIL_NOTIFICATIONS_ENABLED is TRUE with 'smtp' provider, but EMAIL_HOST is not configured.")
+            if not self.EMAIL_TO:
+                cfg_logger.warning("EMAIL_NOTIFICATIONS_ENABLED is TRUE with 'smtp' provider, but EMAIL_TO recipient is missing.")
+
+        # 4. Storage directories verification
+        self.setup_directories()
+
 
 settings = Settings()
 settings.setup_directories()
+

@@ -85,7 +85,8 @@ class DuplicateDetectionService:
             path = parsed.path.rstrip("/")
             return urllib.parse.urlunparse(("https", netloc, path, "", new_query, ""))
         except Exception:
-            return url.strip().lower()
+            return url.strip()
+
 
     @classmethod
     def canonicalize_location(cls, location: Optional[str], remote_type: Optional[str]) -> Tuple[bool, str]:
@@ -216,10 +217,13 @@ class DuplicateDetectionService:
 
         # Blocking query: same normalized company substring OR shared source URL prefix
         filters = []
+        if target_job.canonical_url:
+            filters.append(Job.canonical_url == target_job.canonical_url)
         if target_job.company:
             filters.append(Job.company.ilike(f"%{target_job.company[:5]}%"))
         if first_title_token and len(first_title_token) >= 4:
             filters.append(Job.title.ilike(f"%{first_title_token}%"))
+
 
         if not filters:
             return []
@@ -292,12 +296,21 @@ class DuplicateDetectionService:
         cand_time = best_match.first_seen_at or best_match.discovered_at
         job_time = job.first_seen_at or job.discovered_at
 
-        if cand_time and job_time and cand_time < job_time:
+        def _to_utc(dt: Optional[datetime]) -> Optional[datetime]:
+            if dt is None:
+                return None
+            return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+        cand_utc = _to_utc(cand_time)
+        job_utc = _to_utc(job_time)
+
+        if cand_utc and job_utc and cand_utc < job_utc:
             canonical_job_id = best_match.id
         elif len(best_match.description or "") > len(job.description or ""):
             canonical_job_id = best_match.id
         else:
             canonical_job_id = job.id
+
 
         new_cluster = JobDuplicateCluster(
             canonical_job_id=canonical_job_id,

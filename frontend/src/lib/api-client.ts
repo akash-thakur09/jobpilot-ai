@@ -242,6 +242,16 @@ export const api = {
         last_verified_at?: string | null;
         posted_at?: string | null;
       }>(`/api/v1/jobs/${jobId}/freshness`),
+    verifyFreshness: (jobId: string) =>
+      request<{
+        job_id: string;
+        freshness_status: string;
+        freshness_reason?: string | null;
+        last_verified_at?: string | null;
+        verified_live: boolean;
+      }>(`/api/v1/jobs/${jobId}/freshness/verify`, {
+        method: 'POST',
+      }),
     submitFeedback: (jobId: string, feedbackType: FeedbackType, reason?: string, details?: Record<string, any>) =>
       request<JobFeedback>(`/api/v1/jobs/${jobId}/feedback`, {
         method: 'POST',
@@ -255,6 +265,7 @@ export const api = {
     deleteFeedback: (jobId: string) =>
       request<void>(`/api/v1/jobs/${jobId}/feedback`, { method: 'DELETE' }),
   },
+
 
   // -------------------------------------------------------------------------
   // Matching

@@ -264,3 +264,68 @@
   - 164 passed backend tests across 22 test modules (100% pass rate).
   - 41 passed frontend Vitest tests across 11 test files (100% pass rate).
   - Clean TypeScript compilation (tsc) and production Vite build.
+
+### Phase 12 — Production Readiness and Live-Source Validation
+- [x] Baseline Audit and Inspection:
+  - Validated Git status, Alembic migration history, configuration, source adapters, discovery pipeline, matching services, duplicate detection, freshness tracking, feedback, notifications, resume integrity, and application workflow.
+  - Baseline tests: 164 backend tests passed, 41 frontend tests passed, offline ranking evaluation succeeded.
+- [x] Live-Source Integration Validation and Adapter Hardening:
+  - Extended BaseJobSourceAdapter with check_job_status probe method and SourceRateLimitException.
+  - Greenhouse Adapter:
+    - Added HTTP 429 rate limit detection and dynamic Retry-After header backoff parsing.
+    - Added result limit parameter to Greenhouse API requests.
+    - Added structured salary extraction from job custom metadata and description text patterns.
+    - Added ISO-8601 posted_at normalization from updated_at.
+    - Added check_job_status single-job probe endpoint to verify active vs closed status directly from public Greenhouse board API.
+  - Lever Adapter:
+    - Added HTTP 429 rate limit detection and Retry-After header backoff parsing.
+    - Added native limit parameter to Lever API requests.
+    - Added structured salary extraction from salaryRange and salaryDescription.
+    - Added Unix epoch milliseconds posted_at normalization from createdAt.
+    - Added workplaceType normalization (remote, hybrid, on-site).
+    - Added check_job_status single-job probe endpoint for public Lever boards.
+  - Synthetic Adapter:
+    - Added check_job_status probe support and posted_at timestamps for regression tests.
+  - Live vs Mock Separation:
+    - Dedicated test module tests/test_live_sources_and_adapters.py with comprehensive error handling (429, 500, timeout, malformed responses).
+    - If a live network source is unavailable, status probes report UNKNOWN / unverified rather than claiming success.
+- [x] Live Freshness Verification Service & UI:
+  - Implemented JobFreshnessService.verify_job_live_status to probe job source adapters directly.
+  - Added POST /api/v1/jobs/{job_id}/freshness/verify endpoint.
+  - Added 'Verify Live Status' button with loading and real-time freshness telemetry in JobDetailModal.tsx and updated api.jobs.verifyFreshness.
+- [x] Data Quality and Recommendation Regression Suite:
+  - Created tests/test_data_quality_and_ranking_regressions.py:
+    - Case-sensitive URL paths preserved during canonicalization.
+    - Distinct vacancies with similar titles never merged if locations/employers differ.
+    - Source outages isolate gracefully without marking listings as closed.
+    - Deterministic eligibility disqualification (e.g. US citizenship) strictly wins over positive user feedback.
+    - Startup configuration safety validation enforces local security boundaries.
+- [x] Database Schema Migration and Query Performance:
+  - Added database indexes on jobs.canonical_url and jobs.discovered_at to prevent full-table scans during discovery and duplicate candidate matching.
+  - Created and cleanly applied Alembic revision e145f6789abc (revising d934b51c8a2f). Alembic head is now e145f6789abc.
+  - Fixed candidate blocking filters and offset-naive vs offset-aware datetime comparisons in DuplicateDetectionService.
+- [x] Configuration & Operational Security:
+  - Added validate_startup_configuration() to Settings, invoked during FastAPI lifespan startup:
+    - Strictly enforces JOBPILOT_REAL_SUBMISSION_ENABLED = False for local execution.
+    - Warns and logs safeguards if APP_HOST is non-localhost.
+    - Validates mandatory local storage directories (storage/resumes, storage/screenshots).
+    - Validates SMTP settings and logs mock email provider status.
+- [x] 12-Stage End-to-End Acceptance Flow:
+  - Implemented tests/test_production_readiness_e2e.py validating:
+    1. Candidate profile creation.
+    2. Supported source configuration.
+    3. Discovery pipeline execution.
+    4. Normalized job and source health verification.
+    5. Deterministic eligibility and matching.
+    6. Score breakdown explanations and freshness tracking.
+    7. Cross-source duplicate detection and review.
+    8. User feedback recording and revision.
+    9. In-app notification creation.
+    10. Mock email notification delivery.
+    11. Resume PDF generation, atomic SHA-256 storage, and bit-for-bit file integrity verification.
+    12. Application preparation, canonical SHA-256 fingerprint approval, and safety gate blocking external execution.
+- [x] Final Test & Quality Validation:
+  - Backend test suite: 175 passed tests across 25 test modules (100% pass rate).
+  - Frontend test suite: 41 passed Vitest tests across 11 test files (100% pass rate).
+  - TypeScript compilation (tsc) and Vite production build passed without errors.
+  - Offline ranking evaluation: Precision@3 = 1.0, NDCG@3 = 1.0, Duplicate F1 = 1.0, Freshness Accuracy = 1.0.
