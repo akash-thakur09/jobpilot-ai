@@ -72,8 +72,10 @@ class DiscoveryMatchingPipeline:
         session.add(run)
         await session.commit()
         await session.refresh(run)
+        run_id = str(run.id)
+        run_started_at = run.started_at
 
-        logger.info(f"Started DiscoveryRun '{run.id}' triggered by '{trigger}' for sources: {target_sources}")
+        logger.info(f"Started DiscoveryRun '{run_id}' triggered by '{trigger}' for sources: {target_sources}")
 
         # Metrics trackers
         total_discovered = 0
@@ -316,13 +318,13 @@ class DiscoveryMatchingPipeline:
                         notification_type=NotificationType.NEW_MATCH,
                         channel=NotificationChannel.IN_APP,
                         job_id=rel_job.id,
-                        run_id=run.id,
+                        run_id=run_id,
                         dedup_key=dedup_key,
                         metadata_json={
                             "company": rel_job.company,
                             "title": rel_job.title,
                             "job_id": rel_job.id,
-                            "run_id": run.id,
+                            "run_id": run_id,
                             "score": rel_match.overall_score,
                         },
                     )
@@ -365,8 +367,8 @@ class DiscoveryMatchingPipeline:
                 message=f"Scheduled discovery failed completely for sources: {', '.join(failed_sources)}. Error: {error_summary}",
                 notification_type=NotificationType.RUN_FAILED,
                 channel=NotificationChannel.IN_APP,
-                run_id=run.id,
-                dedup_key=f"run_failed:{run.id}",
+                run_id=run_id,
+                dedup_key=f"run_failed:{run_id}",
                 metadata_json={"failed_sources": failed_sources, "error_summary": error_summary},
             )
             notifications_created += 1
@@ -377,8 +379,8 @@ class DiscoveryMatchingPipeline:
                 message=f"Sources {', '.join(failed_sources)} failed during discovery, but {', '.join(successful_sources)} completed.",
                 notification_type=NotificationType.PARTIAL_FAILURE,
                 channel=NotificationChannel.IN_APP,
-                run_id=run.id,
-                dedup_key=f"run_partial:{run.id}",
+                run_id=run_id,
+                dedup_key=f"run_partial:{run_id}",
                 metadata_json={
                     "successful_sources": successful_sources,
                     "failed_sources": failed_sources,
@@ -387,13 +389,19 @@ class DiscoveryMatchingPipeline:
             )
             notifications_created += 1
 
-        run.status = final_status
-        run.items_processed = total_discovered
-        run.items_succeeded = total_inserted + total_updated + total_unchanged
-        run.items_failed = total_source_failures
-        run.error_summary = error_summary
-        run.completed_at = datetime.now(timezone.utc)
-        run.metadata_json = {
+        # Safely reload run instance to avoid MissingGreenlet if session was rolled back during source failures
+        run_instance = await session.get(AutomationRun, run_id)
+        if not run_instance:
+            run_instance = run
+
+        now_completed = datetime.now(timezone.utc)
+        run_instance.status = final_status
+        run_instance.items_processed = total_discovered
+        run_instance.items_succeeded = total_inserted + total_updated + total_unchanged
+        run_instance.items_failed = total_source_failures
+        run_instance.error_summary = error_summary
+        run_instance.completed_at = now_completed
+        run_instance.metadata_json = {
             "trigger": trigger,
             "sources_requested": target_sources,
             "sources_attempted": successful_sources + failed_sources,
@@ -410,17 +418,17 @@ class DiscoveryMatchingPipeline:
             "notifications_created": notifications_created,
         }
 
-        session.add(run)
+        session.add(run_instance)
         await session.commit()
-        await session.refresh(run)
+        await session.refresh(run_instance)
 
         logger.info(
-            f"Finalized DiscoveryRun '{run.id}' ({final_status}): Discovered={total_discovered}, "
+            f"Finalized DiscoveryRun '{run_id}' ({final_status}): Discovered={total_discovered}, "
             f"Inserted={total_inserted}, Evaluated={jobs_evaluated}, Eligible={jobs_eligible}"
         )
 
         return {
-            "run_id": run.id,
+            "run_id": run_id,
             "status": final_status,
             "trigger": trigger,
             "items_processed": total_discovered,
@@ -435,6 +443,6 @@ class DiscoveryMatchingPipeline:
             "failed_sources": failed_sources,
             "source_diagnostics": source_diagnostics,
             "error_summary": error_summary,
-            "started_at": run.started_at.isoformat(),
-            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "started_at": run_started_at.isoformat(),
+            "completed_at": now_completed.isoformat(),
         }

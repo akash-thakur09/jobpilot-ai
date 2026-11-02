@@ -199,3 +199,95 @@ def test_startup_settings_validation_enforces_safety():
     # Must be automatically reverted to False for local safety
     assert settings.JOBPILOT_REAL_SUBMISSION_ENABLED is False
     assert settings.APP_HOST in ("127.0.0.1", "localhost")
+
+
+def test_weekly_digest_with_string_weekday_configuration():
+    """Verify that string weekly day configurations ('mon', 'monday') calculate next digest without TypeError."""
+    from backend.app.services.digest_service import DigestService
+    
+    assert DigestService.parse_target_weekday("mon") == 0
+    assert DigestService.parse_target_weekday("monday") == 0
+    assert DigestService.parse_target_weekday("FRI") == 4
+    assert DigestService.parse_target_weekday(2) == 2
+
+    candidate = CandidateProfile(
+        id="cand_weekly_test",
+        full_name="Alex Digest",
+        email="alex@digest.test",
+        notification_preferences={
+            "email_enabled": True,
+            "delivery_mode": "WEEKLY_DIGEST",
+            "timezone": "America/New_York",
+        },
+    )
+    next_time = DigestService.compute_next_digest_time(candidate)
+    assert next_time is not None
+    # Next time should be a Monday at 09:00 NY time -> 13:00 or 14:00 UTC depending on DST
+    assert next_time.tzinfo is not None
+
+
+def test_pdf_verifier_validates_resumes_without_education_section():
+    """Verify that a candidate resume omitting education does not fail ATS validation."""
+    from backend.app.resumes.schemas import TailoredResumeContent, TailoredExperience
+    from backend.app.resumes.pdf_renderer import ResumePdfRenderer
+    from backend.app.resumes.pdf_verifier import ResumePdfVerifier
+
+    content = TailoredResumeContent(
+        full_name="Jordan NoEdu",
+        email="jordan@noedu.test",
+        phone="+1-555-0123",
+        location="Remote",
+        summary="Skilled backend engineer with deep Python experience.",
+        skills_by_category={"Core Technologies": ["Python", "Docker"]},
+        experiences=[
+            TailoredExperience(
+                company="OpenSource Inc",
+                role="Backend Dev",
+                start_date="2022-01",
+                is_current=True,
+                bullet_points=["Built resilient microservices."],
+            )
+        ],
+        educations=[],  # Empty education
+    )
+
+    pdf_bytes = ResumePdfRenderer.render_to_bytes(content)
+    is_valid, extracted_text, diag = ResumePdfVerifier.verify_pdf_bytes(pdf_bytes, content)
+    assert is_valid is True
+    assert "Candidate name verified" in diag["checks_passed"][0]
+
+
+@pytest.mark.asyncio
+async def test_discovery_pipeline_isolates_source_failure_without_missing_greenlet(db_session: AsyncSession, monkeypatch):
+    """Verify that source failure and rollback do not cause MissingGreenlet during run finalization."""
+    from backend.app.services.discovery_pipeline import DiscoveryMatchingPipeline
+    from backend.app.collectors.base import BaseJobSourceAdapter, RawJobData
+
+    class FailingAdapter(BaseJobSourceAdapter):
+        @property
+        def source_identifier(self) -> str:
+            return "failing_mock"
+        @property
+        def source_name(self) -> str:
+            return "Failing Mock"
+        @property
+        def rate_limit_rpm(self) -> int:
+            return 30
+        async def fetch_jobs(self, **kwargs):
+            raise ConnectionError("Simulated remote network failure")
+        def normalize(self, raw):
+            raise NotImplementedError()
+
+    from backend.app.collectors import ADAPTER_REGISTRY
+    monkeypatch.setitem(ADAPTER_REGISTRY, "failing_mock", FailingAdapter)
+
+    result = await DiscoveryMatchingPipeline.execute(
+        session=db_session,
+        sources=["failing_mock"],
+        trigger="manual",
+    )
+
+    assert result["status"] == "FAILED"
+    assert "failing_mock" in result["failed_sources"]
+    assert "Simulated remote network failure" in result["error_summary"]
+

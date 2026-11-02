@@ -25,6 +25,24 @@ _digest_lock = asyncio.Lock()
 
 
 class DigestService:
+    WEEKDAY_MAP = {
+        "mon": 0, "monday": 0, "0": 0, 0: 0,
+        "tue": 1, "tuesday": 1, "1": 1, 1: 1,
+        "wed": 2, "wednesday": 2, "2": 2, 2: 2,
+        "thu": 3, "thursday": 3, "3": 3, 3: 3,
+        "fri": 4, "friday": 4, "4": 4, 4: 4,
+        "sat": 5, "saturday": 5, "5": 5, 5: 5,
+        "sun": 6, "sunday": 6, "6": 6, 6: 6,
+    }
+
+    @classmethod
+    def parse_target_weekday(cls, val: Any) -> int:
+        if isinstance(val, int):
+            return val % 7
+        if isinstance(val, str):
+            return cls.WEEKDAY_MAP.get(val.strip().lower(), 0)
+        return 0
+
     @staticmethod
     def resolve_candidate_timezone(candidate: Optional[CandidateProfile] = None) -> ZoneInfo:
         """Resolves the candidate's timezone or falls back to system configured timezone or UTC."""
@@ -82,7 +100,7 @@ class DigestService:
             return next_local.astimezone(timezone.utc)
 
         if delivery_mode == "WEEKLY_DIGEST":
-            target_weekday = settings.DIGEST_WEEKLY_DAY  # 0 = Monday
+            target_weekday = cls.parse_target_weekday(settings.DIGEST_WEEKLY_DAY)  # 0 = Monday
             days_until = (target_weekday - local_now.weekday()) % 7
             candidate_target = datetime.combine(local_now.date() + timedelta(days=days_until), target_time, tzinfo=tz)
 
@@ -239,7 +257,7 @@ class DigestService:
         if delivery_mode == "WEEKLY_DIGEST":
             period = "weekly"
             period_key = cls.get_current_period_key(candidate, period, ref_time)
-            target_weekday = settings.DIGEST_WEEKLY_DAY  # 0 = Monday
+            target_weekday = cls.parse_target_weekday(settings.DIGEST_WEEKLY_DAY)  # 0 = Monday
 
             # Due if today is on or after target weekday and past target time
             if local_now.weekday() < target_weekday or (

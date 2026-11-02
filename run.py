@@ -1,8 +1,19 @@
 import sys
+import os
+import subprocess
 from pathlib import Path
 
-# Ensure project root is in sys.path
+# Auto-delegate to project virtual environment if invoked with global python
 root_dir = Path(__file__).resolve().parent
+venv_python = root_dir / "backend" / ".venv" / "Scripts" / "python.exe"
+if not venv_python.exists():
+    venv_python = root_dir / "backend" / ".venv" / "bin" / "python"
+
+if venv_python.exists() and Path(sys.executable).resolve() != venv_python.resolve():
+    result = subprocess.run([str(venv_python)] + sys.argv)
+    sys.exit(result.returncode)
+
+# Ensure project root is in sys.path
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 

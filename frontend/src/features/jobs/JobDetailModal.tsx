@@ -52,6 +52,17 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
     }
   }, [job?.id, isOpen]);
 
+  const [freshnessStatus, setFreshnessStatus] = useState<string>(job?.freshness_status || 'ACTIVE');
+  const [freshnessReason, setFreshnessReason] = useState<string | null | undefined>(job?.freshness_reason);
+  const [isVerifyingFreshness, setIsVerifyingFreshness] = useState(false);
+
+  useEffect(() => {
+    if (job) {
+      setFreshnessStatus(job.freshness_status || 'ACTIVE');
+      setFreshnessReason(job.freshness_reason);
+    }
+  }, [job?.id]);
+
   if (!job) return null;
 
   const eligConfig = matchResult?.eligibility_status 
@@ -82,17 +93,6 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
       setIsSubmittingFeedback(false);
     }
   };
-
-  const [freshnessStatus, setFreshnessStatus] = useState<string>(job?.freshness_status || 'ACTIVE');
-  const [freshnessReason, setFreshnessReason] = useState<string | null | undefined>(job?.freshness_reason);
-  const [isVerifyingFreshness, setIsVerifyingFreshness] = useState(false);
-
-  useEffect(() => {
-    if (job) {
-      setFreshnessStatus(job.freshness_status || 'ACTIVE');
-      setFreshnessReason(job.freshness_reason);
-    }
-  }, [job?.id]);
 
 
   const handleVerifyFreshness = async () => {

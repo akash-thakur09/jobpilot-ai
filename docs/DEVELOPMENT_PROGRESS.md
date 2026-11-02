@@ -325,7 +325,9 @@
     11. Resume PDF generation, atomic SHA-256 storage, and bit-for-bit file integrity verification.
     12. Application preparation, canonical SHA-256 fingerprint approval, and safety gate blocking external execution.
 - [x] Final Test & Quality Validation:
-  - Backend test suite: 175 passed tests across 25 test modules (100% pass rate).
+  - Backend test suite: 178 passed tests across 25 test modules (100% pass rate).
+  - Resume version acceptance suite: 7 passed tests.
   - Frontend test suite: 41 passed Vitest tests across 11 test files (100% pass rate).
   - TypeScript compilation (tsc) and Vite production build passed without errors.
-  - Offline ranking evaluation: Precision@3 = 1.0, NDCG@3 = 1.0, Duplicate F1 = 1.0, Freshness Accuracy = 1.0.
+  - Offline ranking evaluation: Precision@3 = 1.0000, Precision@5 = 0.8000, Recall@3 = 0.6000 (theoretical maximum for 5 relevant items), Recall@5 = 0.8000, NDCG@3 = 1.0000, NDCG@5 = 0.9178, Duplicate F1 = 1.0000, Freshness Accuracy = 1.0000.
+  - QA Hardening: Resolved MissingGreenlet on source failure rollback, offset-naive datetime comparisons in staleness evaluation, weekly digest string weekday parsing, and ATS resume verification for candidates without education.

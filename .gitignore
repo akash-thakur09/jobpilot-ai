@@ -1,9 +1,11 @@
-# Environments & Virtual Envs
+# Environments & Virtual Environments
 .venv/
 venv/
 ENV/
 env/
 __pypackages__/
+backend/.venv/
+backend/venv/
 
 # Python Caches & Build
 __pycache__/
@@ -17,38 +19,54 @@ build/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+*.log
+*.tmp
 
 # Node & Frontend
 node_modules/
+frontend/node_modules/
 frontend/dist/
+dist/
 frontend/.vite/
+coverage/
+frontend/coverage/
 .npm
 *.tsbuildinfo
 
-# Sensitive Files & Env
+# Sensitive Files & Environment Variables
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 *.pem
 *.key
+*.pfx
+*.cert
 
-# Application Storage & Artifacts (PDFs, Generated resumes, Screenshots)
-storage/resumes/*.pdf
-storage/master_resumes/*.pdf
-storage/screenshots/
+# Application Storage & Artifacts (Uploads, Generated Resumes, Screenshots)
+storage/resumes/*
 !storage/resumes/.gitkeep
+storage/master_resumes/*
 !storage/master_resumes/.gitkeep
+storage/screenshots/*
 !storage/screenshots/.gitkeep
 
-# IDE & OS
+# IDE, Editor & OS Artifacts
 .vscode/
 .idea/
 *.swp
 *.swo
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Docker volumes / local db files
+# SQLite Databases & Local Docker Volumes
+*.sqlite
 *.sqlite3
+*.sqlite3-journal
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
+storage/*.db
+storage/*.sqlite*
 pgdata/

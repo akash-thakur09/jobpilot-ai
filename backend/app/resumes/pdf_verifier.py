@@ -56,13 +56,17 @@ class ResumePdfVerifier:
             else:
                 diagnostics["checks_failed"].append("Candidate email missing from extracted text")
 
-            # Check 3: Essential Section Headings
+            # Check 3: Essential Section Headings (checked for sections populated in content)
             essential_headings = [
                 "PROFESSIONAL SUMMARY",
                 "TECHNICAL SKILLS",
-                "PROFESSIONAL EXPERIENCE",
-                "EDUCATION",
             ]
+            if getattr(expected_content, "experiences", None):
+                essential_headings.append("PROFESSIONAL EXPERIENCE")
+            if getattr(expected_content, "educations", None):
+                essential_headings.append("EDUCATION")
+            if getattr(expected_content, "projects", None):
+                essential_headings.append("KEY PROJECTS")
             for heading in essential_headings:
                 if heading.lower() in cleaned_text.lower():
                     diagnostics["checks_passed"].append(f"Section '{heading}' verified")

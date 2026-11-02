@@ -64,7 +64,20 @@ def create_app() -> FastAPI:
     # Include Routers
     app.include_router(api_v1_router)
 
-    # Root health redirect/check
+    # Root routes
+    @app.get("/", tags=["Root"], status_code=status.HTTP_200_OK)
+    async def root_index():
+        return {
+            "name": "JobPilot AI Backend API",
+            "status": "online",
+            "version": "0.1.0",
+            "health": "/health",
+            "docs": "/docs",
+            "api_v1": "/api/v1",
+            "frontend_url": "http://localhost:5173",
+            "message": "JobPilot AI backend is active. Open http://localhost:5173 for the web dashboard or /docs for interactive Swagger API documentation.",
+        }
+
     @app.get("/health", tags=["Root"], status_code=status.HTTP_200_OK)
     async def root_health():
         return {"status": "ok", "app": "JobPilot AI"}

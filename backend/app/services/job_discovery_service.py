@@ -117,6 +117,7 @@ class JobDiscoveryService:
         session.add(run)
         await session.commit()
         await session.refresh(run)
+        run_id = str(run.id)
 
         # 2. Get JobSource record
         source = await cls.get_or_create_source(
@@ -218,10 +219,12 @@ class JobDiscoveryService:
         except Exception as exc:
             await session.rollback()
             logger.error(f"Discovery run failed for source '{source_identifier}': {exc}", exc_info=True)
-            # Log failure in run
-            run.status = AutomationRunStatus.FAILED.value
-            run.error_summary = str(exc)
-            run.completed_at = datetime.now(timezone.utc)
-            session.add(run)
-            await session.commit()
+            # Log failure in run - reload instance to avoid MissingGreenlet after rollback
+            run_instance = await session.get(AutomationRun, run_id)
+            if run_instance:
+                run_instance.status = AutomationRunStatus.FAILED.value
+                run_instance.error_summary = str(exc)
+                run_instance.completed_at = datetime.now(timezone.utc)
+                session.add(run_instance)
+                await session.commit()
             raise

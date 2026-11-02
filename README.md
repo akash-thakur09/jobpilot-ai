@@ -18,6 +18,21 @@ JobPilot AI is a local-first, privacy-focused personal AI job-hunting agent. It 
 
 ---
 
+## User Guide & Documentation Suite
+
+A complete, exhaustive documentation suite is available in [`docs/user-guide/`](docs/user-guide/):
+
+1. **[Application Overview](docs/user-guide/APPLICATION_OVERVIEW.md)**: High-level overview, core problem statement, daily day-in-the-life walkthrough, and comparisons to manual job searching.
+2. **[Complete Feature Inventory](docs/user-guide/FEATURES_AND_FUNCTIONALITY.md)**: Detailed reference covering all 34 feature areas across discovery, matching, resume tailoring, and tracking.
+3. **[Complete User Manual & End-to-End Workflow](docs/user-guide/USER_MANUAL.md)**: 19-stage pipeline deep dive with Mermaid diagrams, walkthrough of a real job from discovery to offer, and a screen-by-screen, click-by-click manual for every UI view and modal.
+4. **[Technical Architecture & Pipeline Internals](docs/user-guide/TECHNICAL_ARCHITECTURE.md)**: Database ER diagrams, application lifecycle state machine, scoring formulas (Policy 1.1.0), SHA-256 approval fingerprinting, and security boundaries.
+5. **[Setup, Configuration & Daily Operations Guide](docs/user-guide/SETUP_AND_DAILY_USAGE.md)**: Installation, database migrations, environment variables, source configuration, and the 15-minute daily job-search routine.
+6. **[Troubleshooting & Diagnostic Guide](docs/user-guide/TROUBLESHOOTING.md)**: Diagnostic matrix covering 19 common failure modes, error messages, root causes, and exact remediation commands.
+7. **[System Limitations & Future Roadmap](docs/user-guide/LIMITATIONS_AND_ROADMAP.md)**: Clear classification of current boundaries, user prerequisites, external dependencies, and planned enhancements.
+8. **[Daily Job-Search Checklist](docs/user-guide/DAILY_JOB_SEARCH_CHECKLIST.md)**: Actionable checklists for initial setup, daily morning triage (10–15 mins), and weekly pipeline reviews.
+
+---
+
 ## Quickstart
 
 ### Prerequisites

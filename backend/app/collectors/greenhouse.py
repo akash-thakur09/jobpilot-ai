@@ -39,7 +39,7 @@ class GreenhouseJobAdapter(BaseJobSourceAdapter):
         self,
         board_token: str = "example",
         fixtures: Optional[List[Dict[str, Any]]] = None,
-        timeout_seconds: float = 10.0,
+        timeout_seconds: float = 25.0,
         limit: Optional[int] = None,
         **kwargs,
     ) -> List[RawJobData]:

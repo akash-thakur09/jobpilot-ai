@@ -106,11 +106,14 @@ class JobFreshnessService:
         stale_count = 0
         for job in candidates:
             last_seen = job.last_seen_at or job.discovered_at
-            if last_seen and last_seen < threshold_dt:
-                job.freshness_status = FreshnessStatus.POTENTIALLY_STALE.value
-                days_unseen = (now - last_seen).days
-                job.freshness_reason = f"Unseen for {days_unseen} days across completed discovery runs"
-                stale_count += 1
+            if last_seen:
+                if last_seen.tzinfo is None:
+                    last_seen = last_seen.replace(tzinfo=timezone.utc)
+                if last_seen < threshold_dt:
+                    job.freshness_status = FreshnessStatus.POTENTIALLY_STALE.value
+                    days_unseen = (now - last_seen).days
+                    job.freshness_reason = f"Unseen for {days_unseen} days across completed discovery runs"
+                    stale_count += 1
 
         await session.flush()
         return {"evaluated": len(candidates), "marked_stale": stale_count}
