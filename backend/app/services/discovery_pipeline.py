@@ -18,6 +18,7 @@ from backend.app.models.enums import (
     NotificationChannel,
     RelevanceClassification,
     RemoteType,
+    SourceIntegrationStatus,
 )
 from backend.app.services.job_discovery_service import JobDiscoveryService
 from backend.app.services.matching_service import MatchingService
@@ -46,7 +47,7 @@ class DiscoveryMatchingPipeline:
     ) -> Dict[str, Any]:
         """
         Executes the end-to-end 12-stage discovery, matching, and notification pipeline.
-        
+
         Args:
             session: AsyncSession database session
             sources: List of source identifiers to run. If None, runs all supported sources.
@@ -139,6 +140,8 @@ class DiscoveryMatchingPipeline:
                         name=adapter.source_name,
                         base_url="https://jobs.example.com",
                         rate_limit=adapter.rate_limit_rpm,
+                        source_type=adapter.source_type,
+                        integration_status=adapter.integration_status.value,
                     )
 
                     # Check if disabled (if sources list was not explicitly provided, respect is_enabled)
@@ -148,6 +151,34 @@ class DiscoveryMatchingPipeline:
 
                     effective_params = dict(source_record.config_json or {})
                     effective_params.update(source_params.get(src_id, {}))
+
+                    # Guard against automated polling for MANUAL_IMPORT_ONLY sources
+                    has_fixtures_or_payload = any(
+                        k in effective_params for k in ("fixtures", "manual_import_payload", "email_payload")
+                    )
+                    if adapter.integration_status == SourceIntegrationStatus.MANUAL_IMPORT_ONLY and not has_fixtures_or_payload:
+                        logger.info(f"Source '{src_id}' is manual-import-only; skipping automated polling.")
+                        source_diagnostics[src_id] = {
+                            "status": "SKIPPED_MANUAL_IMPORT_ONLY",
+                            "discovered": 0,
+                            "message": f"Source '{adapter.source_name}' requires manual import (JSON/alerts) and does not support automated background polling.",
+                        }
+                        continue
+
+                    # Guard against sources that require configuration or authorization when not configured
+                    if adapter.integration_status in (
+                        SourceIntegrationStatus.CONFIGURATION_REQUIRED,
+                        SourceIntegrationStatus.AUTHORIZATION_REQUIRED,
+                    ) and not has_fixtures_or_payload:
+                        is_valid, reason = adapter.validate_configuration(effective_params)
+                        if not is_valid:
+                            logger.info(f"Source '{src_id}' skipped: {reason}")
+                            source_diagnostics[src_id] = {
+                                "status": adapter.integration_status.value,
+                                "discovered": 0,
+                                "error": reason,
+                            }
+                            continue
 
                     # Stage 3: Fetch jobs using adapter
                     raw_items = await adapter.fetch_jobs(**effective_params)
@@ -166,94 +197,95 @@ class DiscoveryMatchingPipeline:
                     # Stage 4 & 5: Normalize, evaluate career relevance, and deduplicate
                     for raw in raw_items:
                         try:
-                            normalized = adapter.normalize(raw)
+                            async with session.begin_nested():
+                                normalized = adapter.normalize(raw)
 
-                            # Evaluate job relevance deterministically
-                            relevance_res = RelevanceEngine.evaluate_job(
-                                job_title=normalized.title,
-                                job_description=normalized.description,
-                                job_location=normalized.location,
-                                remote_allowed=(normalized.remote_type == RemoteType.REMOTE),
-                                job_work_mode=normalized.employment_type,
-                                preferences=candidate_prefs,
-                                job_salary_min=normalized.salary_min,
-                                job_salary_max=normalized.salary_max,
-                                job_currency=normalized.currency,
-                            )
-                            if relevance_res.classification in (
-                                RelevanceClassification.HIGHLY_RELEVANT,
-                                RelevanceClassification.POTENTIALLY_RELEVANT,
-                            ):
-                                src_relevant += 1
-
-                            # Query existing by (source_id, external_id)
-                            existing_stmt = select(Job).where(
-                                Job.source_id == source_record.id,
-                                Job.external_id == normalized.external_id,
-                            )
-                            existing_res = await session.execute(existing_stmt)
-                            existing_job = existing_res.scalar_one_or_none()
-
-                            if existing_job:
-                                seen_source_job_ids.append(existing_job.id)
-                                await JobFreshnessService.mark_job_verified_active(session, existing_job)
-
-                                # Update relevance fields on existing job
-                                existing_job.relevance_score = relevance_res.score
-                                existing_job.relevance_classification = relevance_res.classification.value
-                                existing_job.relevance_metadata = relevance_res.to_dict()
-
-                                # Stage 6: Update existing job only if material fields changed
-                                has_changes = False
-                                if existing_job.title != normalized.title:
-                                    existing_job.title = normalized.title
-                                    has_changes = True
-                                if existing_job.description != normalized.description:
-                                    existing_job.description = normalized.description
-                                    has_changes = True
-                                if existing_job.location != normalized.location:
-                                    existing_job.location = normalized.location
-                                    has_changes = True
-
-                                if has_changes:
-                                    existing_job.updated_at = datetime.now(timezone.utc)
-                                    src_updated += 1
-                                    newly_saved_jobs.append(existing_job)
-                                else:
-                                    src_unchanged += 1
-                            else:
-                                now_dt = datetime.now(timezone.utc)
-                                # Insert brand new job with deterministic relevance score
-                                new_job = Job(
-                                    source_id=source_record.id,
-                                    external_id=normalized.external_id,
-                                    title=normalized.title,
-                                    company=normalized.company,
-                                    canonical_url=normalized.canonical_url,
-                                    location=normalized.location,
-                                    remote_type=normalized.remote_type.value,
-                                    employment_type=normalized.employment_type,
-                                    description=normalized.description,
-                                    salary_min=normalized.salary_min,
-                                    salary_max=normalized.salary_max,
-                                    currency=normalized.currency,
-                                    status=JobStatus.DISCOVERED.value,
-                                    raw_payload=normalized.raw_payload,
-                                    relevance_score=relevance_res.score,
-                                    relevance_classification=relevance_res.classification.value,
-                                    relevance_metadata=relevance_res.to_dict(),
-                                    posted_at=getattr(normalized, "posted_at", None),
-                                    first_seen_at=now_dt,
-                                    last_seen_at=now_dt,
-                                    last_verified_at=now_dt,
-                                    freshness_status=FreshnessStatus.ACTIVE.value,
-                                    freshness_reason="Initial discovery",
+                                # Evaluate job relevance deterministically
+                                relevance_res = RelevanceEngine.evaluate_job(
+                                    job_title=normalized.title,
+                                    job_description=normalized.description,
+                                    job_location=normalized.location,
+                                    remote_allowed=(normalized.remote_type == RemoteType.REMOTE),
+                                    job_work_mode=normalized.employment_type,
+                                    preferences=candidate_prefs,
+                                    job_salary_min=normalized.salary_min,
+                                    job_salary_max=normalized.salary_max,
+                                    job_currency=normalized.currency,
                                 )
-                                session.add(new_job)
-                                await session.flush()
-                                seen_source_job_ids.append(new_job.id)
-                                src_inserted += 1
-                                newly_saved_jobs.append(new_job)
+                                if relevance_res.classification in (
+                                    RelevanceClassification.HIGHLY_RELEVANT,
+                                    RelevanceClassification.POTENTIALLY_RELEVANT,
+                                ):
+                                    src_relevant += 1
+
+                                # Query existing by (source_id, external_id)
+                                existing_stmt = select(Job).where(
+                                    Job.source_id == source_record.id,
+                                    Job.external_id == normalized.external_id,
+                                )
+                                existing_res = await session.execute(existing_stmt)
+                                existing_job = existing_res.scalar_one_or_none()
+
+                                if existing_job:
+                                    seen_source_job_ids.append(existing_job.id)
+                                    await JobFreshnessService.mark_job_verified_active(session, existing_job)
+
+                                    # Update relevance fields on existing job
+                                    existing_job.relevance_score = relevance_res.score
+                                    existing_job.relevance_classification = relevance_res.classification.value
+                                    existing_job.relevance_metadata = relevance_res.to_dict()
+
+                                    # Stage 6: Update existing job only if material fields changed
+                                    has_changes = False
+                                    if existing_job.title != normalized.title:
+                                        existing_job.title = normalized.title
+                                        has_changes = True
+                                    if existing_job.description != normalized.description:
+                                        existing_job.description = normalized.description
+                                        has_changes = True
+                                    if existing_job.location != normalized.location:
+                                        existing_job.location = normalized.location
+                                        has_changes = True
+
+                                    if has_changes:
+                                        existing_job.updated_at = datetime.now(timezone.utc)
+                                        src_updated += 1
+                                        newly_saved_jobs.append(existing_job)
+                                    else:
+                                        src_unchanged += 1
+                                else:
+                                    now_dt = datetime.now(timezone.utc)
+                                    # Insert brand new job with deterministic relevance score
+                                    new_job = Job(
+                                        source_id=source_record.id,
+                                        external_id=normalized.external_id,
+                                        title=normalized.title,
+                                        company=normalized.company,
+                                        canonical_url=normalized.canonical_url,
+                                        location=normalized.location,
+                                        remote_type=normalized.remote_type.value,
+                                        employment_type=normalized.employment_type,
+                                        description=normalized.description,
+                                        salary_min=normalized.salary_min,
+                                        salary_max=normalized.salary_max,
+                                        currency=normalized.currency,
+                                        status=JobStatus.DISCOVERED.value,
+                                        raw_payload=normalized.raw_payload,
+                                        relevance_score=relevance_res.score,
+                                        relevance_classification=relevance_res.classification.value,
+                                        relevance_metadata=relevance_res.to_dict(),
+                                        posted_at=getattr(normalized, "posted_at", None),
+                                        first_seen_at=now_dt,
+                                        last_seen_at=now_dt,
+                                        last_verified_at=now_dt,
+                                        freshness_status=FreshnessStatus.ACTIVE.value,
+                                        freshness_reason="Initial discovery",
+                                    )
+                                    session.add(new_job)
+                                    await session.flush()
+                                    seen_source_job_ids.append(new_job.id)
+                                    src_inserted += 1
+                                    newly_saved_jobs.append(new_job)
 
                         except Exception as item_err:
                             logger.error(f"Error normalizing item {getattr(raw, 'external_id', 'unknown')} from {src_id}: {item_err}")

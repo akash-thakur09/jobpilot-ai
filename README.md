@@ -14,7 +14,7 @@ JobPilot AI is a local-first, privacy-focused personal AI job-hunting agent. It 
 - **Candidate Feedback Loop**: Deterministic score adjustments from user feedback (Relevant, Not Relevant, Already Applied, Not Interested, Duplicate).
 - **Immutable Application History**: Every submitted application preserves the exact resume version, PDF file, and SHA-256 checksum used at submission time.
 - **Safe Browser Automation**: Uses Playwright for form filling and resume uploading, strictly enforcing human approval and blocking real submissions by default.
-- **Multi-Source Job Discovery**: Adapters for public APIs, company career pages (Greenhouse, Lever), and scheduled discovery with rate limiting and error isolation.
+- **Multi-Source & Indian Job Board Integrations**: Built-in support for ATS platforms (Greenhouse, Lever), regional Indian job boards (Naukri.com, Instahyre, Cutshort, Hirist, Foundit), and aggregators (LinkedIn India, Indeed India) with zero-circumvention compliance, CTC/LPA normalization, and alert/manual ingestion engines.
 
 ---
 
@@ -30,6 +30,26 @@ A complete, exhaustive documentation suite is available in [`docs/user-guide/`](
 6. **[Troubleshooting & Diagnostic Guide](docs/user-guide/TROUBLESHOOTING.md)**: Diagnostic matrix covering 19 common failure modes, error messages, root causes, and exact remediation commands.
 7. **[System Limitations & Future Roadmap](docs/user-guide/LIMITATIONS_AND_ROADMAP.md)**: Clear classification of current boundaries, user prerequisites, external dependencies, and planned enhancements.
 8. **[Daily Job-Search Checklist](docs/user-guide/DAILY_JOB_SEARCH_CHECKLIST.md)**: Actionable checklists for initial setup, daily morning triage (10–15 mins), and weekly pipeline reviews.
+
+---
+
+## Indian Job Board Integrations & Ingestion Modes
+
+JobPilot AI integrates with seven major Indian hiring platforms while strictly adhering to ethical, legal, and anti-bot boundaries:
+
+| Platform | Source Type | Integration Status | Supported Ingestion Modes | Salary / CTC Support |
+| :--- | :--- | :--- | :--- | :--- |
+| **Naukri.com** | `job_board` | `MANUAL_IMPORT_ONLY` | Inbound Email Alerts, Structured JSON | LPA (Lakhs INR), 0–200 LPA range |
+| **Instahyre** | `job_board` | `MANUAL_IMPORT_ONLY` | Opportunity Digest, Structured Export | LPA + Equity / ESOP metadata |
+| **Cutshort** | `job_board` | `MANUAL_IMPORT_ONLY` | Fast-Track Alerts, Structured JSON | LPA + Skills tags |
+| **Hirist** | `job_board` | `CONFIGURATION_REQUIRED` | Configured HTTPS RSS Feeds, Alert Ingestion | LPA + Tech categorization |
+| **Foundit (Monster)** | `job_board` | `MANUAL_IMPORT_ONLY` | Inbound Job Alerts, Manual JSON | LPA range + Experience bracket |
+| **LinkedIn India** | `aggregator` | `AUTHORIZATION_REQUIRED` | Saved Alert Ingestion, Partner API (when authorized) | Disclosed INR/USD ranges |
+| **Indeed India** | `aggregator` | `MANUAL_IMPORT_ONLY` | Inbound Job Alerts, Structured JSON Import | Converted annual INR to LPA |
+| **Greenhouse** | `ats` | `AVAILABLE` | Public Employer Boards | Board Token Ingestion |
+| **Lever** | `ats` | `AVAILABLE` | Public Employer Boards | Site Token Ingestion |
+
+For full architectural analysis and technical specifications, see [`docs/INDIAN_JOB_SOURCES_INTEGRATION_SPEC.md`](docs/INDIAN_JOB_SOURCES_INTEGRATION_SPEC.md).
 
 ---
 

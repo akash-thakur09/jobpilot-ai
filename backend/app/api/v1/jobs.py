@@ -13,6 +13,8 @@ from backend.app.schemas.job import (
     JobListResponse,
     JobSourceRead,
     JobSourceConfigUpdate,
+    JobImportRequest,
+    JobImportResponse,
     JobDiscoveryRequest,
     JobDiscoveryResponse,
     JobDuplicateClusterRead,
@@ -182,6 +184,30 @@ async def update_job_source_config(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
 
 
+@router.post("/sources/{identifier}/import", response_model=JobImportResponse)
+async def import_jobs_for_source(
+    identifier: str,
+    request: JobImportRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Ingest manual jobs, alert email blocks, or structured JSON for Indian or ATS job boards.
+    Evaluates relevance, prevents duplicates, and updates source metrics.
+    """
+    try:
+        res = await JobDiscoveryService.import_jobs_from_payload(
+            session=session,
+            source_identifier=identifier,
+            payload=request.payload,
+            format_type=request.format,
+        )
+        return JobImportResponse(**res)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 from backend.app.models.job import Job, JobSource, JobDuplicateCluster
 from backend.app.models.candidate import CandidateProfile
 from backend.app.models.feedback import JobFeedback
@@ -190,6 +216,8 @@ from backend.app.schemas.job import (
     JobListResponse,
     JobSourceRead,
     JobSourceConfigUpdate,
+    JobImportRequest,
+    JobImportResponse,
     JobDiscoveryRequest,
     JobDiscoveryResponse,
     JobDuplicateClusterRead,

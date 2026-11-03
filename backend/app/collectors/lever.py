@@ -31,6 +31,10 @@ class LeverJobAdapter(BaseJobSourceAdapter):
         return "Lever Job Board"
 
     @property
+    def source_type(self) -> str:
+        return "ats"
+
+    @property
     def rate_limit_rpm(self) -> int:
         return 30
 

@@ -20,6 +20,8 @@ import {
   JobListResponse,
   JobSource,
   JobSourceConfigUpdate,
+  JobImportRequest,
+  JobImportResponse,
   JobSearchPreferences,
   JobSearchPreferencesUpdate,
   MatchScore,
@@ -229,6 +231,11 @@ export const api = {
     updateSource: (identifier: string, data: JobSourceConfigUpdate) =>
       request<JobSource>(`/api/v1/jobs/sources/${identifier}`, {
         method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    importJobs: (identifier: string, data: JobImportRequest) =>
+      request<JobImportResponse>(`/api/v1/jobs/sources/${identifier}/import`, {
+        method: 'POST',
         body: JSON.stringify(data),
       }),
     discover: (

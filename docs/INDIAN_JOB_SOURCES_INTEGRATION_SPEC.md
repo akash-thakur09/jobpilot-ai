@@ -23,8 +23,8 @@ This document provides a comprehensive technical feasibility analysis and archit
 | **Instahyre** | No public API; invitation/recruiter based | Custom rate-limiting, Cloudflare | Very High (Direct compensation & equity) | High (Tech startups, Unicorns, AI) | Headless Session / Email Digest Parser | Tier 1 |
 | **Cutshort** | No public candidate API; webhook access for employers | WAF + Device fingerprinting | Very High (Verified tech compensation) | High (Product & AI tech roles) | Inbound Email Ingestion / Verified Alerts | Tier 1 |
 | **LinkedIn India** | Highly restricted; official API requires LinkedIn Talent Solutions Partner agreement | Cloudflare, strict telemetry, aggressive IP bans | Moderate (Often unstated or wide USD/INR) | Extremely High (Global + Indian tech) | Official Guest RSS / Email Alerts | Tier 2 |
-| **Indeed India** | Partner API available (requires Publisher account approval) | Cloudflare, strict IP rate-limiting | Moderate (Hourly/Monthly/Annual INR estimates) | High (MNCs + Service firms + Product) | Publisher Feed / Aggregated RSS | Tier 2 |
-| **Hirist** | Closed recruiter API; internal mobile endpoints | PerimeterX / Cloudflare | High (Tech-focused LPA brackets) | Medium-High (Specialized Tech/AI/Backend) | Direct RSS / Inbound Alert Parsing | Tier 2 |
+| **Indeed India** | Legacy Publisher API decommissioned; employer-only APIs | Cloudflare, strict IP rate-limiting | Moderate (Hourly/Monthly/Annual INR estimates) | High (MNCs + Service firms + Product) | Inbound Email Alerts & JSON Import (Manual Only) | Tier 2 |
+| **Hirist** | Closed recruiter API; web interface is Next.js SPA | PerimeterX / Cloudflare | High (Tech-focused LPA brackets) | Medium-High (Specialized Tech/AI/Backend) | Custom HTTPS RSS Feed & Alert Digest (Config Required) | Tier 2 |
 | **Foundit (Monster)** | Enterprise API only (Foundit Recruiter Suite) | Cloudflare, Bot detection | Moderate (Range in LPA) | Medium (Enterprise, Legacy tech) | Inbound Email Alerts / Scheduled Feed | Tier 3 |
 
 ---
@@ -164,3 +164,55 @@ flowchart TD
   - Anti-detect Playwright configuration.
   - Safe request rate limiting (<= 1 request per 15 seconds).
 
+
+
+---
+
+## 5. Completed Implementation & Architecture Matrix
+
+JobPilot AI has fully integrated the Indian hiring platforms into its discovery pipeline with zero-circumvention compliance, deterministic LPA compensation normalization, and alert/manual ingestion engines:
+
+### 5.1 Architecture & Status Matrix
+
+| Source Identifier | Platform Name | Source Type | Integration Status | Automated Fetch | Manual / Alert Ingestion | Compensation Support |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `naukri` | **Naukri.com** | `job_board` | `MANUAL_IMPORT_ONLY` | Blocked by Akamai/Cloudflare | Inbound Email Alerts, Structured JSON | LPA (Lakhs INR), 0–200 LPA range |
+| `instahyre` | **Instahyre** | `job_board` | `MANUAL_IMPORT_ONLY` | Requires Candidate Session | Opportunity Digest, Structured Export | LPA + Equity / ESOP metadata |
+| `cutshort` | **Cutshort** | `job_board` | `MANUAL_IMPORT_ONLY` | Fingerprinted Session Required | Fast-Track Alerts, Structured JSON | LPA + Skills tags |
+| `hirist` | **Hirist** | `job_board` | `AVAILABLE` | Public Category RSS / Feeds | Inbound Alerts, Manual JSON | LPA + Tech categorization |
+| `foundit` | **Foundit (Monster)** | `job_board` | `MANUAL_IMPORT_ONLY` | Enterprise RMS Only | Inbound Job Alerts, Manual JSON | LPA range + Experience bracket |
+| `linkedin` | **LinkedIn India** | `aggregator` | `AUTHORIZATION_REQUIRED` | Talent Solutions Partner Only | Saved Alert Ingestion, Manual JSON | Disclosed INR/USD ranges |
+| `indeed` | **Indeed India** | `aggregator` | `CONFIGURATION_REQUIRED` | Publisher XML/JSON Feed | Publisher Feed, Inbound Alerts | Converted annual INR to LPA |
+| `greenhouse` | **Greenhouse** | `ats` | `AVAILABLE` | Public Employer Boards | Public Board Token Ingestion | USD / Foreign / INR |
+| `lever` | **Lever** | `ats` | `AVAILABLE` | Public Employer Boards | Public Site Token Ingestion | USD / Foreign / INR |
+| `synthetic` | **Synthetic Generator** | `synthetic` | `AVAILABLE` | Deterministic Local Engine | Test Fixtures | Varied LPA / USD |
+
+### 5.2 Key Deliverables & Implemented Modules
+
+1. **Unified Base Adapter Contract (`backend/app/collectors/base.py`)**:
+   - `source_type`: Declares platform role (`ats`, `job_board`, `aggregator`, `synthetic`).
+   - `integration_status`: Exposes `SourceIntegrationStatus` (`AVAILABLE`, `CONFIGURATION_REQUIRED`, `AUTHORIZATION_REQUIRED`, `MANUAL_IMPORT_ONLY`, `UNAVAILABLE`, `DISABLED`, `ERROR`).
+   - `is_available()`: Determines whether automated headless execution is permitted.
+   - `validate_configuration()`: Verifies presence of publisher IDs, RSS feeds, or API tokens.
+   - `NormalizedJob`: Extended with `country`, `workplace_type`, `experience_min`, `experience_max`, `source_metadata`.
+
+2. **Source Adapters (`backend/app/collectors/`)**:
+   - `naukri.py`: Inbound alert and JSON ingestion with Lacs/LPA compensation parsing.
+   - `instahyre.py`: Opportunity digest parsing with tech stack and equity extraction.
+   - `cutshort.py`: Fast-track opportunity parsing with tag extraction.
+   - `hirist.py`: Live category RSS/XML parsing and alert ingestion.
+   - `foundit.py`: Inbound alert parsing and LPA extraction.
+   - `linkedin.py`: Partner configuration validation and alert export ingestion.
+   - `indeed.py`: Publisher feed validation and annual INR to LPA conversion.
+   - `indian_parser_utils.py`: Deterministic LPA, monthly INR, experience bracket, and alert text extraction.
+
+3. **Database Schema & Migrations (`backend/alembic/versions/d823fa19b2e4_...`)**:
+   - Added `source_type` and `integration_status` to `job_sources` table.
+
+4. **API Endpoints (`backend/app/api/v1/jobs.py`)**:
+   - `GET /api/v1/jobs/sources`: Returns all 10 sources with diagnostics and integration status.
+   - `POST /api/v1/jobs/sources/{identifier}/import`: Ingests email alert text or JSON payloads, evaluates career relevance, and prevents duplicates.
+
+5. **Frontend UI (`frontend/src/features/scheduler/DiscoverySourcesCard.tsx`)**:
+   - Displays all sources with color-coded integration status pills (`Available`, `Config Required`, `Auth Required`, `Manual Import / Alert`).
+   - Interactive "Import" modal allowing instant copy-paste ingestion of email alerts or JSON data with real-time feedback.

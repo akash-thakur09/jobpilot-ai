@@ -223,3 +223,86 @@ async def test_concurrent_notification_deduplication():
                 os.remove(tmp_db_path)
             except OSError:
                 pass
+
+
+def test_disposable_migration_c14fd127ea45_to_d823fa19b2e4():
+    """
+    Verifies upgrade from c14fd127ea45 to d823fa19b2e4 on an isolated disposable database copy,
+    validates column defaults, tests clean downgrade, and verifies re-upgrade to head.
+    Never modifies user's actual database.
+    """
+    tmp_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp_db_path = tmp_file.name
+    tmp_file.close()
+
+    try:
+        sync_url = f"sqlite:///{tmp_db_path.replace(os.sep, '/')}"
+        ini_path = os.path.abspath("backend/alembic.ini")
+        script_loc = os.path.abspath("backend/alembic")
+
+        alembic_cfg = Config(ini_path)
+        alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
+        alembic_cfg.set_main_option("script_location", script_loc)
+
+        # 1. Upgrade to revision c14fd127ea45
+        command.upgrade(alembic_cfg, "c14fd127ea45")
+
+        engine = create_engine(sync_url)
+        with engine.connect() as conn:
+            cols_before = [row[1] for row in conn.execute(text("PRAGMA table_info(job_sources)")).fetchall()]
+            assert "source_type" not in cols_before
+            assert "integration_status" not in cols_before
+
+            # Insert legacy record under c14fd127ea45
+            conn.execute(
+                text(
+                    "INSERT INTO job_sources (id, identifier, name, base_url, rate_limit_rpm, is_enabled, config_json, jobs_discovered_count, jobs_relevant_count, created_at, updated_at) "
+                    "VALUES ('src-legacy-1', 'naukri', 'Naukri.com', 'https://naukri.com', 30, 1, '{}', 0, 0, :dt, :dt)"
+                ),
+                {"dt": datetime.now(timezone.utc).isoformat()},
+            )
+            conn.commit()
+
+        # 2. Upgrade to d823fa19b2e4 (head)
+        command.upgrade(alembic_cfg, "d823fa19b2e4")
+
+        with engine.connect() as conn:
+            cols_after = [row[1] for row in conn.execute(text("PRAGMA table_info(job_sources)")).fetchall()]
+            assert "source_type" in cols_after
+            assert "integration_status" in cols_after
+
+            row = conn.execute(
+                text("SELECT identifier, source_type, integration_status FROM job_sources WHERE id = 'src-legacy-1'")
+            ).fetchone()
+            assert row is not None
+            assert row[0] == "naukri"
+            assert row[1] == "job_board"
+            assert row[2] == "AVAILABLE"
+
+        # 3. Downgrade back to c14fd127ea45
+        command.downgrade(alembic_cfg, "c14fd127ea45")
+
+        with engine.connect() as conn:
+            cols_down = [row[1] for row in conn.execute(text("PRAGMA table_info(job_sources)")).fetchall()]
+            assert "source_type" not in cols_down
+            assert "integration_status" not in cols_down
+
+            row_down = conn.execute(text("SELECT id, identifier FROM job_sources WHERE id = 'src-legacy-1'")).fetchone()
+            assert row_down is not None
+            assert row_down[1] == "naukri"
+
+        # 4. Re-upgrade back to d823fa19b2e4
+        command.upgrade(alembic_cfg, "d823fa19b2e4")
+
+        with engine.connect() as conn:
+            cols_reup = [row[1] for row in conn.execute(text("PRAGMA table_info(job_sources)")).fetchall()]
+            assert "source_type" in cols_reup
+            assert "integration_status" in cols_reup
+
+        engine.dispose()
+    finally:
+        if os.path.exists(tmp_db_path):
+            try:
+                os.remove(tmp_db_path)
+            except OSError:
+                pass

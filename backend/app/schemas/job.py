@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class JobSourceConfigUpdate(BaseModel):
@@ -26,6 +26,23 @@ class JobSourceConfigUpdate(BaseModel):
         description="Multiple employer tokens for Lever",
     )
     count: Optional[int] = Field(None, ge=1, le=50, description="Item count for synthetic source")
+    rss_url: Optional[str] = Field(None, description="Custom RSS/Atom feed URL")
+    feed_url: Optional[str] = Field(None, description="Custom feed URL")
+    publisher_id: Optional[str] = Field(None, description="Deprecated; Indeed operates via manual import")
+    category: Optional[str] = Field(None, description="Category for Hirist / Indian sources")
+    keywords: Optional[List[str]] = Field(None, description="Keywords for alert matching")
+    location: Optional[str] = Field(None, description="Location preference for alert filter")
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("rss_url", "feed_url")
+    @classmethod
+    def validate_feed_url_ssrf(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            from backend.app.core.network_security import SafeFeedFetcher
+            is_valid, reason = SafeFeedFetcher.validate_url(v)
+            if not is_valid:
+                raise ValueError(f"Disallowed feed URL: {reason}")
+        return v
 
 
 class JobSourceRead(BaseModel):
@@ -41,6 +58,8 @@ class JobSourceRead(BaseModel):
     last_error_summary: Optional[str] = None
     jobs_discovered_count: int = 0
     jobs_relevant_count: int = 0
+    source_type: Optional[str] = "job_board"
+    integration_status: Optional[str] = "AVAILABLE"
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -176,3 +195,39 @@ class RelevanceReevaluationResponse(BaseModel):
     low_relevance_count: int
     status: str = "COMPLETED"
 
+
+
+class JobImportRequest(BaseModel):
+    source_identifier: str = Field(
+        ...,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
+        max_length=50,
+        description="Target source identifier, e.g. 'naukri', 'instahyre', 'cutshort'",
+    )
+    format: str = Field(
+        "json",
+        pattern=r"^(json|email_text|html)$",
+        description="Payload format: 'json' or 'email_text' or 'html'",
+    )
+    payload: Any = Field(..., description="JSON array of jobs (max 100), or raw email alert text/HTML string")
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload_limits(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            if len(v) > 500_000:
+                raise ValueError("Payload exceeds maximum permitted size of 500,000 characters.")
+        elif isinstance(v, list):
+            if len(v) > 100:
+                raise ValueError("Batch JSON import exceeds maximum limit of 100 items per request.")
+        return v
+
+
+class JobImportResponse(BaseModel):
+    source_identifier: str
+    items_received: int
+    items_parsed: int
+    items_saved: int
+    items_relevant: int
+    duplicates_detected: int
+    errors: List[str] = Field(default_factory=list)

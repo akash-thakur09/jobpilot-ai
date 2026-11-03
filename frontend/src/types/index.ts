@@ -356,6 +356,15 @@ export interface RankingEvaluationSummary {
   limitations_and_assumptions: string[];
 }
 
+export type SourceIntegrationStatus =
+  | 'AVAILABLE'
+  | 'CONFIGURATION_REQUIRED'
+  | 'AUTHORIZATION_REQUIRED'
+  | 'MANUAL_IMPORT_ONLY'
+  | 'UNAVAILABLE'
+  | 'DISABLED'
+  | 'ERROR';
+
 export interface JobSource {
   id: string;
   identifier: string;
@@ -366,6 +375,7 @@ export interface JobSource {
   last_discovered_at?: string | null;
   is_enabled?: boolean;
   source_type?: string;
+  integration_status?: SourceIntegrationStatus | string;
   board_identifier?: string;
   last_run_at?: string | null;
   last_status?: string | null;
@@ -382,6 +392,28 @@ export interface JobSourceConfigUpdate {
   site_token?: string;
   site_tokens?: string[];
   count?: number;
+  rss_url?: string;
+  feed_url?: string;
+  publisher_id?: string;
+  category?: string;
+  keywords?: string[];
+  location?: string;
+}
+
+export interface JobImportRequest {
+  source_identifier: string;
+  format: 'json' | 'email_text' | 'html';
+  payload: any;
+}
+
+export interface JobImportResponse {
+  source_identifier: string;
+  items_received: number;
+  items_parsed: number;
+  items_saved: number;
+  items_relevant: number;
+  duplicates_detected: number;
+  errors: string[];
 }
 
 export interface JobDiscoveryResponse {
