@@ -3,11 +3,25 @@ from backend.app.collectors.base import BaseJobSourceAdapter, RawJobData, Normal
 from backend.app.collectors.synthetic import SyntheticJobAdapter
 from backend.app.collectors.greenhouse import GreenhouseJobAdapter
 from backend.app.collectors.lever import LeverJobAdapter
+from backend.app.collectors.naukri import NaukriJobAdapter
+from backend.app.collectors.instahyre import InstahyreJobAdapter
+from backend.app.collectors.cutshort import CutshortJobAdapter
+from backend.app.collectors.hirist import HiristJobAdapter
+from backend.app.collectors.foundit import FounditJobAdapter
+from backend.app.collectors.linkedin import LinkedInJobAdapter
+from backend.app.collectors.indeed import IndeedJobAdapter
 
 ADAPTER_REGISTRY: Dict[str, Type[BaseJobSourceAdapter]] = {
     "synthetic": SyntheticJobAdapter,
     "greenhouse": GreenhouseJobAdapter,
     "lever": LeverJobAdapter,
+    "naukri": NaukriJobAdapter,
+    "instahyre": InstahyreJobAdapter,
+    "cutshort": CutshortJobAdapter,
+    "hirist": HiristJobAdapter,
+    "foundit": FounditJobAdapter,
+    "linkedin": LinkedInJobAdapter,
+    "indeed": IndeedJobAdapter,
 }
 
 
@@ -28,6 +42,13 @@ __all__ = [
     "SyntheticJobAdapter",
     "GreenhouseJobAdapter",
     "LeverJobAdapter",
+    "NaukriJobAdapter",
+    "InstahyreJobAdapter",
+    "CutshortJobAdapter",
+    "HiristJobAdapter",
+    "FounditJobAdapter",
+    "LinkedInJobAdapter",
+    "IndeedJobAdapter",
     "ADAPTER_REGISTRY",
     "get_adapter",
 ]

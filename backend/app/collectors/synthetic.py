@@ -18,6 +18,10 @@ class SyntheticJobAdapter(BaseJobSourceAdapter):
         return "Synthetic Test Job Generator"
 
     @property
+    def source_type(self) -> str:
+        return "synthetic"
+
+    @property
     def rate_limit_rpm(self) -> int:
         return 120
 

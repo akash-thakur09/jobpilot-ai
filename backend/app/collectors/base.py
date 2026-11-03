@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
-from backend.app.models.enums import RemoteType
+from backend.app.models.enums import RemoteType, SourceIntegrationStatus
 
 
 class RawJobData(BaseModel):
@@ -27,6 +27,11 @@ class NormalizedJob(BaseModel):
     salary_min: Optional[float] = None
     salary_max: Optional[float] = None
     currency: Optional[str] = "USD"
+    country: Optional[str] = "India"
+    workplace_type: Optional[str] = "Remote"
+    experience_min: Optional[float] = None
+    experience_max: Optional[float] = None
+    source_metadata: Optional[Dict[str, Any]] = None
     posted_at: Optional[datetime] = None
     raw_payload: Optional[Dict[str, Any]] = None
 
@@ -53,7 +58,7 @@ class BaseJobSourceAdapter(ABC):
     @property
     @abstractmethod
     def source_identifier(self) -> str:
-        """Unique lowercase identifier, e.g. 'greenhouse', 'lever', 'synthetic'."""
+        """Unique lowercase identifier, e.g. 'greenhouse', 'lever', 'naukri'."""
         pass
 
     @property
@@ -63,10 +68,43 @@ class BaseJobSourceAdapter(ABC):
         pass
 
     @property
+    def source_type(self) -> str:
+        """Type of source: 'ats', 'job_board', 'aggregator', 'synthetic'."""
+        return "job_board"
+
+    @property
+    def integration_status(self) -> SourceIntegrationStatus:
+        """Integration availability status."""
+        return SourceIntegrationStatus.AVAILABLE
+
+    @property
     @abstractmethod
     def rate_limit_rpm(self) -> int:
         """Maximum requests per minute allowed."""
         pass
+
+    def is_available(self) -> bool:
+        """Whether this adapter can fetch jobs automatically without manual import/auth."""
+        return self.integration_status in (
+            SourceIntegrationStatus.AVAILABLE,
+            SourceIntegrationStatus.CONFIGURATION_REQUIRED,
+        )
+
+    def validate_configuration(self, config: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Validates configuration parameters for this source."""
+        return True, None
+
+    def get_source_metadata(self) -> Dict[str, Any]:
+        """Provides metadata about source capabilities, country support, salary format, etc."""
+        return {
+            "source_identifier": self.source_identifier,
+            "source_name": self.source_name,
+            "source_type": self.source_type,
+            "integration_status": self.integration_status.value,
+            "rate_limit_rpm": self.rate_limit_rpm,
+            "supports_automated_fetch": self.is_available(),
+            "supports_manual_import": True,
+        }
 
     @abstractmethod
     async def fetch_jobs(self, **kwargs) -> List[RawJobData]:
@@ -87,4 +125,3 @@ class BaseJobSourceAdapter(ABC):
             None: Status cannot be verified due to network error, timeout, or rate limit.
         """
         return None
-

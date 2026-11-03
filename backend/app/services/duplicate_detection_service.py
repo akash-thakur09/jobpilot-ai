@@ -191,6 +191,9 @@ class DuplicateDetectionService:
         if desc_jaccard >= 0.40:
             score += 0.15 * min(desc_jaccard / 0.6, 1.0)
             reasons.append(f"Description vocabulary similarity ({desc_jaccard:.2f})")
+        elif desc_jaccard < 0.20 and (desc_a_tokens and desc_b_tokens):
+            score -= 0.25
+            reasons.append(f"Divergent description vocabulary ({desc_jaccard:.2f}) indicates distinct vacancies")
 
         score = max(0.0, min(1.0, score))
 

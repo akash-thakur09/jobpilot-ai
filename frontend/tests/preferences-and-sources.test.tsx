@@ -270,7 +270,7 @@ describe('Phase 9 UI Components', () => {
     expect(screen.getByText('75%')).toBeInTheDocument();
 
     // Trigger Test Email
-    const sendTestBtn = screen.getByRole('button', { name: /Send Test Alert/i });
+    const sendTestBtn = await screen.findByRole('button', { name: /Send Test Alert/i });
     fireEvent.click(sendTestBtn);
 
     await waitFor(() => {
@@ -310,7 +310,7 @@ describe('Phase 9 UI Components', () => {
       expect(screen.getByText('Smart Alerts & Notification Delivery')).toBeInTheDocument();
     });
 
-    const sendTestBtn = screen.getByRole('button', { name: /Send Test Alert/i });
+    const sendTestBtn = await screen.findByRole('button', { name: /Send Test Alert/i });
     fireEvent.click(sendTestBtn);
 
     await waitFor(() => {
