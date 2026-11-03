@@ -79,6 +79,13 @@ export function formatApplicationStatusBadge(status?: ApplicationStatus | string
       return { label: 'Approved', variant: 'purple' };
     case 'IN_PROGRESS':
       return { label: 'In Progress', variant: 'warning' };
+    case 'SYNTHETIC_SUBMISSION_IN_PROGRESS':
+      return { label: 'Simulation In Progress', variant: 'warning' };
+    case 'SUBMITTED_SIMULATION':
+    case 'SYNTHETICALLY_SUBMITTED':
+      return { label: 'Submitted (Simulation)', variant: 'purple' };
+    case 'REAL_SUBMITTED':
+      return { label: 'Submitted (Real)', variant: 'success' };
     case 'SUBMITTED':
       return { label: 'Submitted (Synthetic)', variant: 'success' };
     case 'NEEDS_HUMAN_ACTION':
@@ -100,6 +107,8 @@ export function formatAttemptStatusBadge(outcome?: SubmissionOutcome | string): 
   variant: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple';
 } {
   switch (outcome) {
+    case 'SUBMITTED_SIMULATION':
+      return { label: 'Simulation Completed', variant: 'purple' };
     case 'SUCCESS':
       return { label: 'Success', variant: 'success' };
     case 'FAILED':

@@ -52,7 +52,18 @@ export const DiscoverySourcesCard: React.FC = () => {
 
   const handleStartEdit = (source: JobSource) => {
     setEditingSourceId(source.identifier);
-    setEditBoardToken(source.board_identifier || '');
+    const cfg = source.config_json || {};
+    if (cfg.board_tokens && Array.isArray(cfg.board_tokens)) {
+      setEditBoardToken(cfg.board_tokens.join(', '));
+    } else if (cfg.site_tokens && Array.isArray(cfg.site_tokens)) {
+      setEditBoardToken(cfg.site_tokens.join(', '));
+    } else if (cfg.board_token) {
+      setEditBoardToken(cfg.board_token);
+    } else if (cfg.site_token) {
+      setEditBoardToken(cfg.site_token);
+    } else {
+      setEditBoardToken(source.board_identifier || '');
+    }
     setEditIsEnabled(source.is_enabled !== undefined ? source.is_enabled : source.is_active);
     setSaveSuccessMsg(null);
   };
@@ -68,16 +79,24 @@ export const DiscoverySourcesCard: React.FC = () => {
     setError(null);
     setSaveSuccessMsg(null);
 
-    // Validation: board_token alphanumeric, dash, underscore
-    if (editBoardToken.trim() && !/^[a-zA-Z0-9_\-]+$/.test(editBoardToken.trim())) {
-      setError('Board identifier must contain only alphanumeric characters, underscores, and hyphens.');
+    // Validation: board_token alphanumeric, dash, underscore, comma, space
+    if (editBoardToken.trim() && !/^[a-zA-Z0-9_\-,\s]+$/.test(editBoardToken.trim())) {
+      setError('Board identifier must contain only alphanumeric characters, underscores, hyphens, and commas.');
       setIsSaving(false);
       return;
     }
 
+    const tokens = editBoardToken
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
     const payload: JobSourceConfigUpdate = {
       is_enabled: editIsEnabled,
-      board_token: editBoardToken.trim() || undefined,
+      board_tokens: identifier === 'greenhouse' ? tokens : undefined,
+      board_token: identifier === 'greenhouse' && tokens.length > 0 ? tokens[0] : undefined,
+      site_tokens: identifier === 'lever' ? tokens : undefined,
+      site_token: identifier === 'lever' && tokens.length > 0 ? tokens[0] : undefined,
     };
 
     try {
@@ -247,9 +266,13 @@ export const DiscoverySourcesCard: React.FC = () => {
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5">
                       Type: <span className="text-slate-300 font-medium capitalize">{source.source_type || source.identifier}</span>
-                      {source.board_identifier && (
+                      {source.config_json?.board_tokens && source.config_json.board_tokens.length > 0 ? (
+                        <> &middot; Boards: <span className="text-indigo-300 font-mono font-medium">{source.config_json.board_tokens.join(', ')}</span></>
+                      ) : source.config_json?.site_tokens && source.config_json.site_tokens.length > 0 ? (
+                        <> &middot; Sites: <span className="text-indigo-300 font-mono font-medium">{source.config_json.site_tokens.join(', ')}</span></>
+                      ) : source.board_identifier ? (
                         <> &middot; Board: <span className="text-indigo-300 font-mono font-medium">{source.board_identifier}</span></>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -292,17 +315,17 @@ export const DiscoverySourcesCard: React.FC = () => {
                   <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
                     <div className="flex-1 w-full">
                       <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        Configured Board Identifier / Token
+                        Configured Employer Board Tokens (Comma-separated for multi-board)
                       </label>
                       <input
                         type="text"
                         value={editBoardToken}
                         onChange={(e) => setEditBoardToken(e.target.value)}
-                        placeholder="e.g. airbnb, stripe, gitlab"
+                        placeholder="e.g. canonical, stripe, github"
                         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                       />
                       <span className="text-[10px] text-slate-500 mt-1 block">
-                        Must match exact board slug on {source.name} (letters, numbers, underscores, hyphens only).
+                        Enter one or multiple employer slugs separated by commas (e.g. canonical, stripe, github).
                       </span>
                     </div>
 
@@ -339,6 +362,9 @@ export const DiscoverySourcesCard: React.FC = () => {
                   </span>
                   <span>
                     Jobs Discovered: <strong className="text-indigo-300 font-medium">{source.jobs_discovered_count ?? 0}</strong>
+                  </span>
+                  <span>
+                    Relevant Jobs: <strong className="text-emerald-400 font-medium">{source.jobs_relevant_count ?? 0}</strong>
                   </span>
                 </div>
 

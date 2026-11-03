@@ -70,10 +70,11 @@ export const ApplicationQueue: React.FC = () => {
     setActionNotice(null);
     try {
       const result = await api.applications.attempt(appId);
+      const isSim = result.outcome === 'SUBMITTED_SIMULATION' || (result.reconciliation_metadata as any)?.simulation;
       setActionNotice(
-        `Synthetic Run Completed: Status ${result.outcome}${
+        `${isSim ? 'Synthetic Simulation Completed' : 'Synthetic Run Completed'}: Status ${result.outcome}${
           result.confirmation_reference ? ` (Confirmation: ${result.confirmation_reference})` : ''
-        }`
+        }${isSim ? '. No external job board was contacted.' : ''}`
       );
       fetchData();
     } catch (err: any) {
@@ -85,11 +86,17 @@ export const ApplicationQueue: React.FC = () => {
   };
 
   // Filter applications by tab
+  const isSubmittedStatus = (status: string) =>
+    status === 'SUBMITTED' ||
+    status === 'SUBMITTED_SIMULATION' ||
+    status === 'REAL_SUBMITTED' ||
+    status === 'SYNTHETICALLY_SUBMITTED';
+
   const filteredApps = applications.filter((app) => {
     if (activeTab === 'ALL') return true;
     if (activeTab === 'REVIEW') return app.status === 'READY_FOR_REVIEW';
     if (activeTab === 'APPROVED') return app.status === 'APPROVED';
-    if (activeTab === 'SUBMITTED') return app.status === 'SUBMITTED';
+    if (activeTab === 'SUBMITTED') return isSubmittedStatus(app.status);
     if (activeTab === 'ACTION_REQUIRED') {
       return (
         app.status === 'OUTCOME_UNKNOWN' ||
@@ -102,7 +109,7 @@ export const ApplicationQueue: React.FC = () => {
 
   const reviewCount = applications.filter((a) => a.status === 'READY_FOR_REVIEW').length;
   const approvedCount = applications.filter((a) => a.status === 'APPROVED').length;
-  const submittedCount = applications.filter((a) => a.status === 'SUBMITTED').length;
+  const submittedCount = applications.filter((a) => isSubmittedStatus(a.status)).length;
   const actionCount = applications.filter((a) =>
     ['OUTCOME_UNKNOWN', 'NEEDS_HUMAN_ACTION', 'FAILED_SUBMISSION', 'FAILED'].includes(a.status)
   ).length;
@@ -261,6 +268,8 @@ export const ApplicationQueue: React.FC = () => {
                     ? 'border-l-4 border-l-blue-500'
                     : app.status === 'APPROVED'
                     ? 'border-l-4 border-l-purple-500'
+                    : app.status === 'SUBMITTED_SIMULATION' || (app.status as string) === 'SYNTHETICALLY_SUBMITTED'
+                    ? 'border-l-4 border-l-purple-500'
                     : app.status === 'SUBMITTED'
                     ? 'border-l-4 border-l-emerald-500'
                     : 'border-l-4 border-l-slate-700'
@@ -279,6 +288,11 @@ export const ApplicationQueue: React.FC = () => {
                       {app.status === 'OUTCOME_UNKNOWN' && (
                         <span className="text-[10px] font-semibold text-amber-400 bg-amber-950/40 border border-amber-900/60 px-1.5 py-0.5 rounded">
                           Action Required: Verify Outcome
+                        </span>
+                      )}
+                      {(app.status === 'SUBMITTED_SIMULATION' || (app.status as string) === 'SYNTHETICALLY_SUBMITTED') && (
+                        <span className="text-[10px] font-semibold text-purple-300 bg-purple-950/60 border border-purple-800/60 px-2 py-0.5 rounded flex items-center gap-1">
+                          Simulation Mode &bull; No External Calls
                         </span>
                       )}
                     </div>
@@ -304,6 +318,20 @@ export const ApplicationQueue: React.FC = () => {
                       <div className="text-xs text-slate-400 bg-slate-900/60 px-2.5 py-1 rounded border border-slate-800">
                         <span className="text-slate-500">Note: </span>
                         {app.notes}
+                      </div>
+                    )}
+
+                    {(app.status === 'SUBMITTED_SIMULATION' || (app.status as string) === 'SYNTHETICALLY_SUBMITTED') && (
+                      <div className="text-xs text-purple-300 bg-purple-950/40 px-2.5 py-1.5 rounded border border-purple-800/50 flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">Local Simulation:</span>
+                        {app.confirmation_evidence?.confirmation_reference && (
+                          <span className="font-mono text-purple-200">
+                            Ref: {app.confirmation_evidence.confirmation_reference}
+                          </span>
+                        )}
+                        <span className="text-purple-400/80 text-[11px]">
+                          — Verified local mock execution, no external job board contacted.
+                        </span>
                       </div>
                     )}
                   </div>

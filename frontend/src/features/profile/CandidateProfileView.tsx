@@ -14,7 +14,6 @@ import {
   Phone,
   MapPin,
   Briefcase,
-  DollarSign,
   GraduationCap,
   Code,
   FolderGit2,
@@ -45,7 +44,7 @@ export const CandidateProfileView: React.FC = () => {
   const [editLocation, setEditLocation] = useState('');
   const [editSummary, setEditSummary] = useState('');
   const [editWorkAuth, setEditWorkAuth] = useState('');
-  const [editMinSalary, setEditMinSalary] = useState<number | undefined>(undefined);
+  const [editPackageLpa, setEditPackageLpa] = useState<number | undefined>(undefined);
   const [editRemotePref, setEditRemotePref] = useState('ALL');
   const [isSavingBasic, setIsSavingBasic] = useState(false);
 
@@ -83,7 +82,10 @@ export const CandidateProfileView: React.FC = () => {
     setEditLocation(data.location || '');
     setEditSummary(data.summary || '');
     setEditWorkAuth(data.work_authorization || '');
-    setEditMinSalary(data.min_salary || undefined);
+    setEditPackageLpa(
+      data.target_package_min_lpa ??
+      (data.min_salary && data.min_salary < 200 ? data.min_salary : undefined)
+    );
     setEditRemotePref(data.remote_preference || 'ALL');
   };
 
@@ -102,7 +104,7 @@ export const CandidateProfileView: React.FC = () => {
         location: editLocation.trim() || undefined,
         summary: editSummary.trim() || undefined,
         work_authorization: editWorkAuth.trim() || undefined,
-        min_salary: editMinSalary ? Number(editMinSalary) : undefined,
+        target_package_min_lpa: editPackageLpa ? Number(editPackageLpa) : undefined,
         remote_preference: editRemotePref,
       });
       setProfile(updated);
@@ -312,10 +314,10 @@ export const CandidateProfileView: React.FC = () => {
                     <Briefcase className="w-3.5 h-3.5 text-slate-500" />
                     Work Auth: {profile.work_authorization || 'Standard'}
                   </span>
-                  {profile.min_salary && (
+                  {(profile.target_package_min_lpa || (profile.min_salary && profile.min_salary < 200)) && (
                     <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                      <DollarSign className="w-3.5 h-3.5" />
-                      Min ${profile.min_salary.toLocaleString()}/yr
+                      <span>₹</span>
+                      Target: {profile.target_package_min_lpa || profile.min_salary} LPA
                     </span>
                   )}
                 </div>
@@ -386,12 +388,14 @@ export const CandidateProfileView: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Minimum Base Salary (USD/yr)</label>
+                    <label className="block text-slate-400 mb-1">Expected Minimum Package (INR LPA)</label>
                     <input
                       type="number"
-                      value={editMinSalary || ''}
-                      onChange={(e) => setEditMinSalary(e.target.value ? Number(e.target.value) : undefined)}
-                      placeholder="e.g. 120000"
+                      min={0}
+                      step={0.5}
+                      value={editPackageLpa || ''}
+                      onChange={(e) => setEditPackageLpa(e.target.value ? Number(e.target.value) : undefined)}
+                      placeholder="e.g. 10"
                       className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200"
                     />
                   </div>

@@ -22,6 +22,8 @@ from backend.app.schemas.resume_import import (
 )
 from backend.app.services.candidate_service import CandidateService
 from backend.app.services.resume_parser import ResumeParserService
+from backend.app.services.relevance_engine import RelevanceEngine
+from backend.app.core.logging import logger
 
 router = APIRouter(prefix="/profile", tags=["Candidate Profile"])
 
@@ -35,7 +37,10 @@ async def get_candidate_profile(session: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Candidate profile does not exist yet.",
         )
-    return profile
+    prefs = await CandidateService.get_search_preferences(session)
+    read_profile = CandidateProfileRead.model_validate(profile)
+    read_profile.search_preferences = prefs
+    return read_profile
 
 
 @router.post("", response_model=CandidateProfileRead, status_code=status.HTTP_201_CREATED)
@@ -43,7 +48,11 @@ async def create_candidate_profile(
     data: CandidateProfileCreate, session: AsyncSession = Depends(get_db)
 ):
     """Create the candidate profile."""
-    return await CandidateService.create_profile(session, data)
+    profile = await CandidateService.create_profile(session, data)
+    prefs = await CandidateService.get_search_preferences(session)
+    read_profile = CandidateProfileRead.model_validate(profile)
+    read_profile.search_preferences = prefs
+    return read_profile
 
 
 @router.patch("", response_model=CandidateProfileRead)
@@ -51,7 +60,11 @@ async def update_candidate_profile(
     data: CandidateProfileUpdate, session: AsyncSession = Depends(get_db)
 ):
     """Update profile details."""
-    return await CandidateService.update_profile(session, data)
+    profile = await CandidateService.update_profile(session, data)
+    prefs = await CandidateService.get_search_preferences(session)
+    read_profile = CandidateProfileRead.model_validate(profile)
+    read_profile.search_preferences = prefs
+    return read_profile
 
 
 # ---------------------------------------------------------------------------
@@ -67,8 +80,13 @@ async def get_search_preferences(session: AsyncSession = Depends(get_db)):
 async def update_search_preferences(
     preferences: JobSearchPreferencesUpdate, session: AsyncSession = Depends(get_db)
 ):
-    """Update job search preferences without modifying verified candidate facts."""
-    return await CandidateService.update_search_preferences(session, preferences)
+    """Update job search preferences and re-evaluate stored jobs against the new preferences."""
+    updated = await CandidateService.update_search_preferences(session, preferences)
+    try:
+        await RelevanceEngine.re_evaluate_stored_jobs(session)
+    except Exception as re_err:
+        logger.warning(f"Relevance re-evaluation after preferences update warning: {re_err}")
+    return updated
 
 
 # ---------------------------------------------------------------------------

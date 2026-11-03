@@ -11,11 +11,20 @@ from backend.app.models.job import Job, JobSource
 from backend.app.models.automation import AutomationRun
 from backend.app.models.candidate import CandidateProfile
 from backend.app.models.matching import MatchScore
-from backend.app.models.enums import AutomationRunStatus, JobStatus, NotificationType, NotificationChannel
+from backend.app.models.enums import (
+    AutomationRunStatus,
+    JobStatus,
+    NotificationType,
+    NotificationChannel,
+    RelevanceClassification,
+    RemoteType,
+)
 from backend.app.services.job_discovery_service import JobDiscoveryService
 from backend.app.services.matching_service import MatchingService
 from backend.app.services.notification_service import NotificationService
 from backend.app.services.email_service import EmailService
+from backend.app.services.relevance_engine import RelevanceEngine
+from backend.app.services.candidate_service import CandidateService
 from backend.app.core.config import settings
 from backend.app.core.logging import logger
 
@@ -45,8 +54,23 @@ class DiscoveryMatchingPipeline:
             trigger: 'manual' or 'scheduled'
             use_ai_matching: Whether to run optional AI semantic matching
         """
-        target_sources = sources or list(ADAPTER_REGISTRY.keys())
+        # Isolate synthetic discovery by default unless explicitly requested or enabled
+        if sources is None:
+            target_sources = [
+                s for s in ADAPTER_REGISTRY.keys()
+                if s != "synthetic" or settings.JOBPILOT_SYNTHETIC_DISCOVERY_ENABLED
+            ]
+        else:
+            target_sources = list(sources)
+
         source_params = source_params or {}
+
+        # Fetch candidate preferences for relevance scoring
+        candidate_prefs = None
+        try:
+            candidate_prefs = await CandidateService.get_search_preferences(session)
+        except Exception as pref_err:
+            logger.debug(f"Candidate search preferences not loaded for relevance: {pref_err}")
 
         # Stage 1: Create persistent AutomationRun record
         run = AutomationRun(
@@ -63,6 +87,7 @@ class DiscoveryMatchingPipeline:
                 "jobs_discovered": 0,
                 "jobs_inserted": 0,
                 "jobs_updated": 0,
+                "jobs_relevant": 0,
                 "jobs_evaluated": 0,
                 "jobs_eligible": 0,
                 "notifications_created": 0,
@@ -82,6 +107,7 @@ class DiscoveryMatchingPipeline:
         total_inserted = 0
         total_updated = 0
         total_unchanged = 0
+        total_relevant = 0
         total_source_failures = 0
         newly_saved_jobs: List[Job] = []
         source_diagnostics: Dict[str, Any] = {}
@@ -131,15 +157,34 @@ class DiscoveryMatchingPipeline:
                     src_updated = 0
                     src_unchanged = 0
                     src_failed = 0
+                    src_relevant = 0
                     seen_source_job_ids: List[str] = []
 
                     from backend.app.services.job_freshness_service import JobFreshnessService
                     from backend.app.models.enums import FreshnessStatus
 
-                    # Stage 4 & 5: Normalize and deduplicate
+                    # Stage 4 & 5: Normalize, evaluate career relevance, and deduplicate
                     for raw in raw_items:
                         try:
                             normalized = adapter.normalize(raw)
+
+                            # Evaluate job relevance deterministically
+                            relevance_res = RelevanceEngine.evaluate_job(
+                                job_title=normalized.title,
+                                job_description=normalized.description,
+                                job_location=normalized.location,
+                                remote_allowed=(normalized.remote_type == RemoteType.REMOTE),
+                                job_work_mode=normalized.employment_type,
+                                preferences=candidate_prefs,
+                                job_salary_min=normalized.salary_min,
+                                job_salary_max=normalized.salary_max,
+                                job_currency=normalized.currency,
+                            )
+                            if relevance_res.classification in (
+                                RelevanceClassification.HIGHLY_RELEVANT,
+                                RelevanceClassification.POTENTIALLY_RELEVANT,
+                            ):
+                                src_relevant += 1
 
                             # Query existing by (source_id, external_id)
                             existing_stmt = select(Job).where(
@@ -152,6 +197,11 @@ class DiscoveryMatchingPipeline:
                             if existing_job:
                                 seen_source_job_ids.append(existing_job.id)
                                 await JobFreshnessService.mark_job_verified_active(session, existing_job)
+
+                                # Update relevance fields on existing job
+                                existing_job.relevance_score = relevance_res.score
+                                existing_job.relevance_classification = relevance_res.classification.value
+                                existing_job.relevance_metadata = relevance_res.to_dict()
 
                                 # Stage 6: Update existing job only if material fields changed
                                 has_changes = False
@@ -173,7 +223,7 @@ class DiscoveryMatchingPipeline:
                                     src_unchanged += 1
                             else:
                                 now_dt = datetime.now(timezone.utc)
-                                # Insert brand new job
+                                # Insert brand new job with deterministic relevance score
                                 new_job = Job(
                                     source_id=source_record.id,
                                     external_id=normalized.external_id,
@@ -189,6 +239,9 @@ class DiscoveryMatchingPipeline:
                                     currency=normalized.currency,
                                     status=JobStatus.DISCOVERED.value,
                                     raw_payload=normalized.raw_payload,
+                                    relevance_score=relevance_res.score,
+                                    relevance_classification=relevance_res.classification.value,
+                                    relevance_metadata=relevance_res.to_dict(),
                                     posted_at=getattr(normalized, "posted_at", None),
                                     first_seen_at=now_dt,
                                     last_seen_at=now_dt,
@@ -221,11 +274,13 @@ class DiscoveryMatchingPipeline:
                     source_record.last_status = "HEALTHY"
                     source_record.last_error_summary = None
                     source_record.jobs_discovered_count = (source_record.jobs_discovered_count or 0) + len(raw_items)
+                    source_record.jobs_relevant_count = (source_record.jobs_relevant_count or 0) + src_relevant
                     await session.commit()
 
                     total_inserted += src_inserted
                     total_updated += src_updated
                     total_unchanged += src_unchanged
+                    total_relevant += src_relevant
 
                     successful_sources.append(src_id)
                     source_diagnostics[src_id] = {
@@ -234,6 +289,7 @@ class DiscoveryMatchingPipeline:
                         "inserted": src_inserted,
                         "updated": src_updated,
                         "unchanged": src_unchanged,
+                        "relevant": src_relevant,
                         "failed_items": src_failed,
                     }
 
@@ -412,6 +468,7 @@ class DiscoveryMatchingPipeline:
             "jobs_inserted": total_inserted,
             "jobs_updated": total_updated,
             "jobs_unchanged": total_unchanged,
+            "jobs_relevant": total_relevant,
             "jobs_evaluated": jobs_evaluated,
             "jobs_eligible": jobs_eligible,
             "new_relevant_matches": len(new_relevant_matches),
@@ -435,6 +492,7 @@ class DiscoveryMatchingPipeline:
             "inserted": total_inserted,
             "updated": total_updated,
             "unchanged": total_unchanged,
+            "relevant": total_relevant,
             "jobs_evaluated": jobs_evaluated,
             "jobs_eligible": jobs_eligible,
             "new_relevant_matches": len(new_relevant_matches),

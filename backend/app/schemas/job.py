@@ -11,11 +11,19 @@ class JobSourceConfigUpdate(BaseModel):
         pattern=r"^[a-zA-Z0-9_\-]+$",
         description="Employer token for Greenhouse (e.g. 'stripe')",
     )
+    board_tokens: Optional[List[str]] = Field(
+        None,
+        description="Multiple employer tokens for Greenhouse",
+    )
     site_token: Optional[str] = Field(
         None,
         max_length=100,
         pattern=r"^[a-zA-Z0-9_\-]+$",
         description="Employer token for Lever (e.g. 'netflix')",
+    )
+    site_tokens: Optional[List[str]] = Field(
+        None,
+        description="Multiple employer tokens for Lever",
     )
     count: Optional[int] = Field(None, ge=1, le=50, description="Item count for synthetic source")
 
@@ -32,6 +40,7 @@ class JobSourceRead(BaseModel):
     last_status: Optional[str] = None
     last_error_summary: Optional[str] = None
     jobs_discovered_count: int = 0
+    jobs_relevant_count: int = 0
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -50,6 +59,9 @@ class JobRead(BaseModel):
     salary_max: Optional[float] = None
     currency: Optional[str] = None
     status: str
+    relevance_score: Optional[float] = None
+    relevance_classification: Optional[str] = None
+    relevance_metadata: Optional[Dict[str, Any]] = None
     discovered_at: datetime
     posted_at: Optional[datetime] = None
     first_seen_at: Optional[datetime] = None
@@ -129,7 +141,9 @@ class JobFreshnessVerifyResponse(BaseModel):
 class JobDiscoveryRequest(BaseModel):
     source_identifier: str = Field(..., description="e.g. 'synthetic', 'greenhouse', 'lever'")
     board_token: Optional[str] = Field(None, description="Employer token for Greenhouse (e.g. 'stripe')")
+    board_tokens: Optional[List[str]] = Field(None, description="Multiple employer tokens for Greenhouse")
     site_token: Optional[str] = Field(None, description="Employer token for Lever (e.g. 'netflix')")
+    site_tokens: Optional[List[str]] = Field(None, description="Multiple employer tokens for Lever")
     count: Optional[int] = Field(5, ge=1, le=50, description="For synthetic discovery")
 
 
@@ -142,3 +156,23 @@ class JobDiscoveryResponse(BaseModel):
     unchanged: int
     failed: int
     status: str
+
+
+class JobRelevanceRead(BaseModel):
+    job_id: str
+    relevance_score: float
+    relevance_classification: str
+    matched_roles: List[str] = Field(default_factory=list)
+    matched_skills: List[str] = Field(default_factory=list)
+    missing_priority_skills: List[str] = Field(default_factory=list)
+    reasons: List[str] = Field(default_factory=list)
+    component_scores: Dict[str, float] = Field(default_factory=dict)
+
+
+class RelevanceReevaluationResponse(BaseModel):
+    total_evaluated: int
+    highly_relevant_count: int
+    potentially_relevant_count: int
+    low_relevance_count: int
+    status: str = "COMPLETED"
+

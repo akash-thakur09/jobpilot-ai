@@ -1,10 +1,13 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, Query, status, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select, func, desc, nulls_last
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_db
-from backend.app.models.job import Job, JobSource
+from backend.app.models.job import Job, JobSource, JobDuplicateCluster
+from backend.app.models.candidate import CandidateProfile
+from backend.app.models.feedback import JobFeedback
+from backend.app.models.enums import RelevanceClassification
 from backend.app.schemas.job import (
     JobRead,
     JobListResponse,
@@ -12,8 +15,22 @@ from backend.app.schemas.job import (
     JobSourceConfigUpdate,
     JobDiscoveryRequest,
     JobDiscoveryResponse,
+    JobDuplicateClusterRead,
+    DuplicateReviewRequest,
+    JobFeedbackCreate,
+    JobFeedbackRead,
+    JobFreshnessRead,
+    JobFreshnessVerifyResponse,
+    JobRelevanceRead,
+    RelevanceReevaluationResponse,
 )
 from backend.app.services.job_discovery_service import JobDiscoveryService
+from backend.app.services.duplicate_detection_service import DuplicateDetectionService
+from backend.app.services.feedback_service import FeedbackService
+from backend.app.services.job_freshness_service import JobFreshnessService
+from backend.app.services.relevance_engine import RelevanceEngine
+from backend.app.services.candidate_service import CandidateService
+from sqlalchemy.orm import selectinload
 
 router = APIRouter(prefix="/jobs", tags=["Jobs & Discovery"])
 
@@ -23,11 +40,17 @@ async def list_jobs(
     company: Optional[str] = None,
     remote_type: Optional[str] = None,
     search: Optional[str] = None,
+    relevance_classification: Optional[str] = Query(
+        None,
+        description="Filter by relevance: HIGHLY_RELEVANT, POTENTIALLY_RELEVANT, LOW_RELEVANCE, or ALL",
+    ),
+    min_relevance_score: Optional[float] = Query(None, ge=0.0, le=100.0),
+    include_synthetic: bool = Query(True, description="Whether to include synthetic test jobs"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_db),
 ):
-    """Retrieve discovered jobs with filtering, full-text keyword search, and pagination."""
+    """Retrieve discovered jobs with relevance filtering, search, and pagination."""
     query = select(Job)
     count_query = select(func.count(Job.id))
 
@@ -44,10 +67,30 @@ async def list_jobs(
         query = query.where(search_filter)
         count_query = count_query.where(search_filter)
 
+    if relevance_classification and relevance_classification.upper() != "ALL":
+        target_cls = relevance_classification.upper()
+        query = query.where(Job.relevance_classification == target_cls)
+        count_query = count_query.where(Job.relevance_classification == target_cls)
+
+    if min_relevance_score is not None:
+        query = query.where(Job.relevance_score >= min_relevance_score)
+        count_query = count_query.where(Job.relevance_score >= min_relevance_score)
+
+    if not include_synthetic:
+        # Exclude synthetic mock jobs from real discovery views
+        synthetic_filter = ~Job.external_id.like("syn_%")
+        query = query.where(synthetic_filter)
+        count_query = count_query.where(synthetic_filter)
+
     total_result = await session.execute(count_query)
     total = total_result.scalar_one()
 
-    query = query.order_by(Job.discovered_at.desc()).offset(offset).limit(limit)
+    # Sort primarily by relevance score (descending), then recency
+    query = query.order_by(
+        nulls_last(Job.relevance_score.desc()),
+        Job.discovered_at.desc(),
+    ).offset(offset).limit(limit)
+
     jobs_result = await session.execute(query)
     items = jobs_result.scalars().all()
 
@@ -56,6 +99,52 @@ async def list_jobs(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post("/re-evaluate-relevance", response_model=RelevanceReevaluationResponse)
+async def re_evaluate_relevance(session: AsyncSession = Depends(get_db)):
+    """
+    Re-scores all stored jobs against the candidate's current search preferences.
+    Updates relevance score, classification, and metadata.
+    """
+    stats = await RelevanceEngine.re_evaluate_stored_jobs(session)
+    return RelevanceReevaluationResponse(**stats)
+
+
+@router.get("/{job_id}/relevance", response_model=JobRelevanceRead)
+async def get_job_relevance(job_id: str, session: AsyncSession = Depends(get_db)):
+    """Retrieve detailed explainable relevance breakdown for a specific job."""
+    res = await session.execute(select(Job).where(Job.id == job_id))
+    job = res.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+
+    if job.relevance_metadata and isinstance(job.relevance_metadata, dict):
+        meta = job.relevance_metadata
+        return JobRelevanceRead(
+            job_id=job.id,
+            relevance_score=meta.get("relevance_score", job.relevance_score or 0.0),
+            relevance_classification=meta.get("relevance_classification", job.relevance_classification or "LOW_RELEVANCE"),
+            matched_roles=meta.get("matched_roles", []),
+            matched_skills=meta.get("matched_skills", []),
+            missing_priority_skills=meta.get("missing_priority_skills", []),
+            reasons=meta.get("reasons", []),
+            component_scores=meta.get("component_scores", {}),
+        )
+
+    # Compute on the fly if not yet cached
+    prefs = await CandidateService.get_search_preferences(session)
+    result = RelevanceEngine.evaluate_job_instance(job, prefs)
+    return JobRelevanceRead(
+        job_id=job.id,
+        relevance_score=result.score,
+        relevance_classification=result.classification.value,
+        matched_roles=result.matched_roles,
+        matched_skills=result.matched_skills,
+        missing_priority_skills=result.missing_priority_skills,
+        reasons=result.reasons,
+        component_scores=result.component_scores,
     )
 
 
@@ -284,8 +373,12 @@ async def trigger_job_discovery(
     params = {}
     if request.board_token:
         params["board_token"] = request.board_token
+    if request.board_tokens:
+        params["board_tokens"] = request.board_tokens
     if request.site_token:
         params["site_token"] = request.site_token
+    if request.site_tokens:
+        params["site_tokens"] = request.site_tokens
     if request.count:
         params["count"] = request.count
 

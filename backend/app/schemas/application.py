@@ -90,6 +90,7 @@ class SubmissionAttemptListResponse(BaseModel):
 
 class ApplicationAttemptRequest(BaseModel):
     target_url: Optional[str] = Field(None, description="Optional target URL for synthetic test execution. Must be local (127.0.0.1 or localhost).")
+    is_synthetic: Optional[bool] = Field(None, description="Whether to execute an isolated synthetic submission simulation without external network calls.")
 
 
 class ApplicationReconcileRequest(BaseModel):

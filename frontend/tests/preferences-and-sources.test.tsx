@@ -317,4 +317,67 @@ describe('Phase 9 UI Components', () => {
       expect(screen.getByText(/SMTP Host connection refused/i)).toBeInTheDocument();
     });
   });
+
+  it('hydrates canonical preferences including AI skills, experience range, and LPA package', async () => {
+    vi.spyOn(api.profile, 'getPreferences').mockResolvedValue({
+      target_roles: ['Full Stack Engineer', 'AI Engineer'],
+      ai_genai_focus_skills: ['LLM', 'RAG', 'Agentic AI'],
+      target_min_experience_years: 2,
+      target_max_experience_years: 5,
+      minimum_package_lpa: 10,
+      preferred_locations: ['Bengaluru', 'Remote'],
+    });
+
+    render(<SearchPreferencesCard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('LLM')).toBeInTheDocument();
+      expect(screen.getByText('RAG')).toBeInTheDocument();
+      expect(screen.getByText('Agentic AI')).toBeInTheDocument();
+    });
+
+    // Check experience inputs
+    const minExpInput = screen.getByPlaceholderText('e.g. 0') as HTMLInputElement;
+    const maxExpInput = screen.getByPlaceholderText('e.g. 6') as HTMLInputElement;
+    const lpaInput = screen.getByPlaceholderText('e.g. 8') as HTMLInputElement;
+
+    expect(minExpInput.value).toBe('2');
+    expect(maxExpInput.value).toBe('5');
+    expect(lpaInput.value).toBe('10');
+    expect(screen.getByText(/Expected Minimum Package \(INR LPA\)/i)).toBeInTheDocument();
+  });
+
+  it('preserves form values and shows error message on save failure', async () => {
+    vi.spyOn(api.profile, 'getPreferences').mockResolvedValue({
+      target_roles: ['AI Engineer'],
+      target_min_experience_years: 3,
+      target_max_experience_years: 6,
+      minimum_package_lpa: 15,
+      ai_genai_focus_skills: ['LangGraph'],
+    });
+
+    vi.spyOn(api.profile, 'updatePreferences').mockRejectedValue(
+      new Error('Database lock error during re-evaluation')
+    );
+
+    render(<SearchPreferencesCard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('LangGraph')).toBeInTheDocument();
+    });
+
+    const saveBtn = screen.getByRole('button', { name: /Save Preferences & Re-score Jobs/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to save search preferences/i)).toBeInTheDocument();
+    });
+
+    // Inputs must not be wiped
+    const minExpInput = screen.getByPlaceholderText('e.g. 0') as HTMLInputElement;
+    const lpaInput = screen.getByPlaceholderText('e.g. 8') as HTMLInputElement;
+    expect(minExpInput.value).toBe('3');
+    expect(lpaInput.value).toBe('15');
+    expect(screen.getByText('LangGraph')).toBeInTheDocument();
+  });
 });

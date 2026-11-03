@@ -5,6 +5,7 @@ from backend.app.models.job import Job
 from backend.app.models.enums import RemoteType
 from backend.app.matching.schemas import ScoringWeights, ScoreBreakdown
 from backend.app.matching.skill_registry import SkillRegistry
+from backend.app.services.salary_service import evaluate_salary_compatibility
 
 
 class DeterministicScoringService:
@@ -91,17 +92,23 @@ class DeterministicScoringService:
                 pref_explanation_parts.append("Fully remote job satisfies location preferences")
 
         # Salary preferences
-        target_min_sal = search_prefs.get("min_salary") or candidate.target_salary_min
-        if target_min_sal:
-            if job.salary_min or job.salary_max:
-                if (job.salary_max and job.salary_max >= target_min_sal) or (job.salary_min and job.salary_min >= target_min_sal):
-                    pref_contributions["salary_satisfies_target"] = True
-                    pref_explanation_parts.append(f"Salary meets minimum requirement of ${target_min_sal:,.0f}")
-                else:
-                    pref_contributions["salary_satisfies_target"] = False
-                    pref_explanation_parts.append(f"Disclosed salary is below target minimum of ${target_min_sal:,.0f}")
-            else:
-                pref_contributions["salary_satisfies_target"] = None  # Undisclosed: do not assume satisfied
+        target_min_lpa = (
+            search_prefs.get("minimum_package_lpa")
+            or search_prefs.get("min_salary_lpa")
+            or getattr(candidate, "target_package_min_lpa", None)
+        )
+        target_min_usd = search_prefs.get("min_salary") or candidate.target_salary_min
+
+        salary_eval = evaluate_salary_compatibility(
+            job_salary_min=job.salary_min,
+            job_salary_max=job.salary_max,
+            job_currency=job.currency,
+            candidate_min_lpa=target_min_lpa,
+            candidate_min_usd=target_min_usd if (not target_min_lpa or (target_min_usd and target_min_usd >= 1000.0)) else None,
+        )
+        pref_contributions["salary_satisfies_target"] = salary_eval["satisfies_target"]
+        if salary_eval["satisfies_target"] is not None:
+            pref_explanation_parts.append(salary_eval["explanation"])
 
         pref_contributions["explanation"] = "; ".join(pref_explanation_parts) if pref_explanation_parts else "Standard evaluation."
 
@@ -373,24 +380,20 @@ class DeterministicScoringService:
 
     @classmethod
     def _score_salary(cls, candidate: CandidateProfile, job: Job) -> float:
-        """Scores salary alignment. Missing salary is treated as neutral (75%)."""
-        if not job.salary_min and not job.salary_max:
-            return 75.0  # Neutral when undisclosed
+        """Scores salary alignment safely across INR LPA and foreign currencies. Missing salary is neutral (75%)."""
+        search_prefs = getattr(candidate, "search_preferences", {}) or {}
+        target_min_lpa = (
+            search_prefs.get("minimum_package_lpa")
+            or search_prefs.get("min_salary_lpa")
+            or getattr(candidate, "target_package_min_lpa", None)
+        )
+        target_min_usd = search_prefs.get("min_salary") or candidate.target_salary_min
 
-        if not candidate.target_salary_min:
-            return 85.0
-
-        # If job max is below candidate min -> lower score
-        if job.salary_max and job.salary_max < candidate.target_salary_min:
-            deficit_pct = (candidate.target_salary_min - job.salary_max) / candidate.target_salary_min
-            if deficit_pct > 0.20:
-                return 20.0
-            return 50.0
-
-        # If job min or max covers candidate min -> 100%
-        if (job.salary_max and job.salary_max >= candidate.target_salary_min) or (
-            job.salary_min and job.salary_min >= candidate.target_salary_min
-        ):
-            return 100.0
-
-        return 75.0
+        eval_res = evaluate_salary_compatibility(
+            job_salary_min=job.salary_min,
+            job_salary_max=job.salary_max,
+            job_currency=job.currency,
+            candidate_min_lpa=target_min_lpa,
+            candidate_min_usd=target_min_usd if (not target_min_lpa or (target_min_usd and target_min_usd >= 1000.0)) else None,
+        )
+        return float(eval_res["score"])

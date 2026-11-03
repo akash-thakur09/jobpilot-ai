@@ -19,6 +19,7 @@ import {
   Copy,
   Clock,
   Layers,
+  Target,
 } from 'lucide-react';
 import { formatSalary, formatEligibilityBadge, formatScoreBadge } from '../../lib/formatters';
 
@@ -294,6 +295,84 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Career Trajectory & Relevance Evaluation */}
+        {job.relevance_score != null && (
+          <div className="p-4 rounded-xl border bg-slate-900/60 border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Career Trajectory Relevance
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${
+                    job.relevance_classification === 'HIGHLY_RELEVANT'
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                      : job.relevance_classification === 'POTENTIALLY_RELEVANT'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  {job.relevance_classification?.replace('_', ' ')}
+                </span>
+                <span className="text-sm font-bold text-slate-100 font-mono">
+                  {Math.round(job.relevance_score)}%
+                </span>
+              </div>
+            </div>
+
+            {job.relevance_metadata && (
+              <div className="space-y-2 text-xs pt-1 border-t border-slate-800/80">
+                {job.relevance_metadata.matched_roles && job.relevance_metadata.matched_roles.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-slate-400 font-medium">Matched Target Role:</span>
+                    {job.relevance_metadata.matched_roles.map((r, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-blue-950/70 text-blue-300 border border-blue-800/60 text-[11px] font-mono">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {job.relevance_metadata.matched_skills && job.relevance_metadata.matched_skills.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-slate-400 font-medium">Matched Skills:</span>
+                    {job.relevance_metadata.matched_skills.map((s, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-800/60 text-[11px] font-mono">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {job.relevance_metadata.missing_priority_skills && job.relevance_metadata.missing_priority_skills.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-slate-400 font-medium">Missing Target Skills:</span>
+                    {job.relevance_metadata.missing_priority_skills.map((s, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[11px] font-mono">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {job.relevance_metadata.reasons && job.relevance_metadata.reasons.length > 0 && (
+                  <div className="pt-1">
+                    <div className="text-[11px] font-medium text-slate-400 mb-1">Scoring Rationale:</div>
+                    <ul className="list-disc list-inside space-y-0.5 text-slate-300 text-[11px]">
+                      {job.relevance_metadata.reasons.map((reason, idx) => (
+                        <li key={idx}>{reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Deterministic Eligibility & Match Score Card */}
         {matchResult && (
