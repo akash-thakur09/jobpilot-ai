@@ -190,23 +190,48 @@ class ApplicationStateMachine:
         },
         ApplicationStatus.APPROVED: {
             ApplicationStatus.IN_PROGRESS,
+            ApplicationStatus.SYNTHETIC_SUBMISSION_IN_PROGRESS,
+            ApplicationStatus.SUBMITTED_SIMULATION,
             ApplicationStatus.READY_FOR_REVIEW,  # Revoked / invalidated approval
+            ApplicationStatus.WITHDRAWN,
+        },
+        ApplicationStatus.SYNTHETIC_SUBMISSION_IN_PROGRESS: {
+            ApplicationStatus.SUBMITTED_SIMULATION,
+            ApplicationStatus.READY_FOR_REVIEW,
+            ApplicationStatus.NEEDS_HUMAN_ACTION,
+            ApplicationStatus.FAILED,
             ApplicationStatus.WITHDRAWN,
         },
         ApplicationStatus.IN_PROGRESS: {
             ApplicationStatus.SUBMITTED,
+            ApplicationStatus.SUBMITTED_SIMULATION,
+            ApplicationStatus.REAL_SUBMITTED,
             ApplicationStatus.OUTCOME_UNKNOWN,
             ApplicationStatus.NEEDS_HUMAN_ACTION,  # Bot challenge / CAPTCHA / unknown field
             ApplicationStatus.FAILED,
         },
         ApplicationStatus.OUTCOME_UNKNOWN: {
             ApplicationStatus.SUBMITTED,  # Reconciled with verified proof
+            ApplicationStatus.SUBMITTED_SIMULATION,
             ApplicationStatus.READY_FOR_REVIEW,  # Reconciled confirming no submission occurred
             ApplicationStatus.NEEDS_HUMAN_ACTION,
             ApplicationStatus.FAILED,
             # Note: Cannot transition directly to IN_PROGRESS (no blind resubmissions)
         },
         ApplicationStatus.SUBMITTED: {
+            ApplicationStatus.SHORTLISTED,
+            ApplicationStatus.INTERVIEW_SCHEDULED,
+            ApplicationStatus.REJECTED,
+            ApplicationStatus.WITHDRAWN,
+        },
+        ApplicationStatus.SUBMITTED_SIMULATION: {
+            ApplicationStatus.SHORTLISTED,
+            ApplicationStatus.INTERVIEW_SCHEDULED,
+            ApplicationStatus.REJECTED,
+            ApplicationStatus.WITHDRAWN,
+            ApplicationStatus.READY_FOR_REVIEW,
+        },
+        ApplicationStatus.REAL_SUBMITTED: {
             ApplicationStatus.SHORTLISTED,
             ApplicationStatus.INTERVIEW_SCHEDULED,
             ApplicationStatus.REJECTED,
@@ -308,8 +333,8 @@ class ApplicationStateMachine:
         """
         current_status = cls.normalize_status(application.status)
 
-        # 1. Submission Gate: SUBMITTED requires reliable external proof
-        if to_status == ApplicationStatus.SUBMITTED:
+        # 1. Submission Gate: SUBMITTED or SUBMITTED_SIMULATION requires reliable confirmation
+        if to_status in (ApplicationStatus.SUBMITTED, ApplicationStatus.SUBMITTED_SIMULATION, ApplicationStatus.REAL_SUBMITTED):
             has_ref = bool(confirmation_reference and confirmation_reference.strip())
             has_evidence = bool(
                 confirmation_evidence
@@ -317,11 +342,14 @@ class ApplicationStateMachine:
                     confirmation_evidence.get("status") in ("confirmed", "SUBMITTED", "verified")
                     or confirmation_evidence.get("receipt")
                     or confirmation_evidence.get("confirmation_number")
+                    or confirmation_evidence.get("simulation") is True
+                    or confirmation_evidence.get("simulated") is True
+                    or confirmation_evidence.get("is_synthetic") is True
                 )
             )
             if not (has_ref or has_evidence):
                 raise MissingSubmissionEvidenceError(
-                    "Cannot transition application to SUBMITTED without verified confirmation evidence "
+                    f"Cannot transition application to {to_status.value} without verified confirmation evidence "
                     "(e.g., confirmation_reference or validated confirmation_evidence payload)."
                 )
 
@@ -416,10 +444,13 @@ class ApplicationStateMachine:
         application.status = target_status.value
         now_utc = datetime.now(timezone.utc)
 
-        if target_status == ApplicationStatus.SUBMITTED:
+        if target_status in (ApplicationStatus.SUBMITTED, ApplicationStatus.SUBMITTED_SIMULATION, ApplicationStatus.REAL_SUBMITTED):
             application.submitted_at = now_utc
+            if target_status == ApplicationStatus.SUBMITTED_SIMULATION:
+                application.submission_method = "SYNTHETIC_SIMULATION"
             if confirmation_reference:
-                application.notes = f"{application.notes or ''} [Confirmation: {confirmation_reference}]".strip()
+                note_tag = "Synthetic Confirmation" if target_status == ApplicationStatus.SUBMITTED_SIMULATION else "Confirmation"
+                application.notes = f"{application.notes or ''} [{note_tag}: {confirmation_reference}]".strip()
             if confirmation_evidence:
                 application.confirmation_evidence = EventSanitizer.sanitize(confirmation_evidence)
 

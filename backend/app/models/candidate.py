@@ -19,6 +19,8 @@ class CandidateProfile(Base, TimestampMixin):
     target_titles: Mapped[List[str]] = mapped_column(JSON, nullable=False, default=list)
     target_salary_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     target_salary_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    target_package_min_lpa: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    target_package_max_lpa: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     remote_preference: Mapped[str] = mapped_column(String(50), nullable=False, default="REMOTE")
     notice_period_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     linkedin_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

@@ -36,71 +36,105 @@ class LeverJobAdapter(BaseJobSourceAdapter):
 
     async def fetch_jobs(
         self,
-        site_token: str = "example",
+        site_token: Optional[str] = None,
+        site_tokens: Optional[List[str]] = None,
         fixtures: Optional[List[Dict[str, Any]]] = None,
         timeout_seconds: float = 25.0,
         limit: Optional[int] = None,
         **kwargs,
     ) -> List[RawJobData]:
-        """Fetches public postings for a given Lever site token."""
+        """Fetches public postings for one or more Lever site tokens."""
+        tokens_to_fetch: List[str] = []
+        if site_tokens and isinstance(site_tokens, list):
+            tokens_to_fetch = [t.strip() for t in site_tokens if t and str(t).strip()]
+        elif site_token:
+            if "," in site_token:
+                tokens_to_fetch = [t.strip() for t in site_token.split(",") if t.strip()]
+            else:
+                tokens_to_fetch = [site_token.strip()]
+
+        if not tokens_to_fetch:
+            tokens_to_fetch = ["example"]
+
         if fixtures is not None:
             items = fixtures[:limit] if limit else fixtures
+            first_token = tokens_to_fetch[0] if tokens_to_fetch else "example"
             return [
                 RawJobData(
                     source_identifier=self.source_identifier,
                     external_id=str(item.get("id")),
-                    payload={**item, "_site_token": site_token},
+                    payload={**item, "_site_token": first_token},
                 )
                 for item in items
             ]
 
-        url = self.BASE_URL.format(site_token=site_token)
+        all_raw_jobs: List[RawJobData] = []
         params = {"mode": "json"}
-        if limit and isinstance(limit, int):
-            params["limit"] = str(limit)
 
-        try:
-            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                response = await client.get(url, params=params)
-                if response.status_code == 429:
-                    retry_after_str = response.headers.get("Retry-After", "60")
-                    try:
-                        retry_sec = int(retry_after_str)
-                    except ValueError:
-                        retry_sec = 60
-                    logger.warning(f"Lever rate limit (429) hit for '{site_token}'. Retry-After: {retry_sec}s")
-                    raise SourceRateLimitException(
-                        f"Lever rate limit exceeded for site '{site_token}'. Retry after {retry_sec}s.",
-                        retry_after_seconds=retry_sec,
-                    )
-                if response.status_code == 404:
-                    logger.warning(f"Lever site '{site_token}' not found (404).")
-                    return []
-                response.raise_for_status()
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            for token in tokens_to_fetch:
+                url = self.BASE_URL.format(site_token=token)
                 try:
-                    postings = response.json()
-                except Exception as json_err:
-                    raise ValueError(f"Malformed JSON response from Lever site '{site_token}': {json_err}")
+                    req_params = dict(params)
+                    if limit and isinstance(limit, int):
+                        remaining_quota = limit - len(all_raw_jobs)
+                        if remaining_quota <= 0:
+                            break
+                        req_params["limit"] = str(remaining_quota)
 
-                if not isinstance(postings, list):
-                    return []
+                    response = await client.get(url, params=req_params)
+                    if response.status_code == 429:
+                        retry_after_str = response.headers.get("Retry-After", "60")
+                        try:
+                            retry_sec = int(retry_after_str)
+                        except ValueError:
+                            retry_sec = 60
+                        logger.warning(f"Lever rate limit (429) hit for '{token}'. Retry-After: {retry_sec}s")
+                        raise SourceRateLimitException(
+                            f"Lever rate limit exceeded for site '{token}'. Retry after {retry_sec}s.",
+                            retry_after_seconds=retry_sec,
+                        )
+                    if response.status_code == 404:
+                        logger.warning(f"Lever site '{token}' not found (404).")
+                        continue
+                    response.raise_for_status()
+                    try:
+                        postings = response.json()
+                    except Exception as json_err:
+                        logger.warning(f"Malformed JSON response from Lever site '{token}': {json_err}")
+                        if len(tokens_to_fetch) == 1:
+                            raise ValueError(f"Malformed JSON response from Lever site '{token}': {json_err}")
+                        continue
 
-                if limit and isinstance(limit, int):
-                    postings = postings[:limit]
+                    if not isinstance(postings, list):
+                        continue
 
-                return [
-                    RawJobData(
-                        source_identifier=self.source_identifier,
-                        external_id=str(post.get("id")),
-                        payload={**post, "_site_token": site_token},
-                    )
-                    for post in postings
-                ]
-        except (SourceRateLimitException, ValueError):
-            raise
-        except Exception as exc:
-            logger.error(f"Error fetching from Lever site '{site_token}': {exc}")
-            raise
+                    if limit and isinstance(limit, int):
+                        remaining_quota = limit - len(all_raw_jobs)
+                        if remaining_quota <= 0:
+                            break
+                        postings = postings[:remaining_quota]
+
+                    for post in postings:
+                        all_raw_jobs.append(
+                            RawJobData(
+                                source_identifier=self.source_identifier,
+                                external_id=str(post.get("id")),
+                                payload={**post, "_site_token": token},
+                            )
+                        )
+
+                    if limit and len(all_raw_jobs) >= limit:
+                        break
+
+                except SourceRateLimitException:
+                    raise
+                except Exception as exc:
+                    logger.error(f"Error fetching from Lever site '{token}': {exc}")
+                    if len(tokens_to_fetch) == 1:
+                        raise
+
+        return all_raw_jobs
 
     async def check_job_status(
         self,

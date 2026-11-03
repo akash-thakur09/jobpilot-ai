@@ -110,7 +110,12 @@ export const ApplicationHistoryDrawer: React.FC<ApplicationHistoryDrawerProps> =
 
                     <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-1.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 font-medium text-slate-200">
+                        <div className="flex flex-wrap items-center gap-1.5 font-medium text-slate-200">
+                          {evt.payload?._event_type && (
+                            <span className="px-2 py-0.5 rounded font-mono text-[10px] bg-slate-800 text-slate-300 border border-slate-700">
+                              {evt.payload._event_type}
+                            </span>
+                          )}
                           {fromBadge && (
                             <>
                               <Badge variant={fromBadge.variant} size="sm">

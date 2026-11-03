@@ -1,6 +1,7 @@
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 
@@ -257,7 +258,7 @@ class CandidateService:
 
     @classmethod
     async def get_search_preferences(cls, session: AsyncSession) -> JobSearchPreferences:
-        """Retrieves structured search preferences, falling back to top-level profile fields."""
+        """Retrieves structured search preferences, falling back to top-level profile fields and smart defaults."""
         profile = await cls.get_profile(session)
         if not profile:
             raise HTTPException(
@@ -265,12 +266,132 @@ class CandidateService:
                 detail="Candidate profile not found.",
             )
         prefs = dict(profile.search_preferences or {})
-        if not prefs.get("target_titles") and profile.target_titles:
+
+        # Bidirectional sync: target_roles <-> target_titles
+        if not prefs.get("target_roles") and prefs.get("target_titles"):
+            prefs["target_roles"] = list(prefs["target_titles"])
+        elif not prefs.get("target_titles") and prefs.get("target_roles"):
+            prefs["target_titles"] = list(prefs["target_roles"])
+        elif not prefs.get("target_roles") and profile.target_titles:
+            prefs["target_roles"] = list(profile.target_titles)
             prefs["target_titles"] = list(profile.target_titles)
+
+        # Smart defaults for target roles
+        if not prefs.get("target_roles"):
+            prefs["target_roles"] = [
+                "Full Stack Engineer",
+                "Software Engineer",
+                "AI Engineer",
+                "Backend Engineer",
+                "Full Stack Developer",
+            ]
+            prefs["target_titles"] = list(prefs["target_roles"])
+
+        # Role aliases default
+        if not prefs.get("role_aliases"):
+            prefs["role_aliases"] = {
+                "Full Stack Engineer": ["Full Stack Developer", "Full-Stack Engineer", "Fullstack Developer", "Web Developer"],
+                "AI Engineer": ["Generative AI Engineer", "GenAI Engineer", "AI/ML Engineer", "LLM Engineer", "Machine Learning Engineer"],
+                "Backend Engineer": ["Python Developer", "Python Engineer", "Backend Developer", "Software Development Engineer"],
+                "Software Engineer": ["SDE", "Core Engineer", "Application Developer"],
+            }
+
+        # Bidirectional sync: must_have_skills <-> required_skills
+        if not prefs.get("must_have_skills") and prefs.get("required_skills"):
+            prefs["must_have_skills"] = list(prefs["required_skills"])
+        elif not prefs.get("required_skills") and prefs.get("must_have_skills"):
+            prefs["required_skills"] = list(prefs["must_have_skills"])
+
+        # Default 3-tier priority skills
+        if not prefs.get("must_have_skills"):
+            prefs["must_have_skills"] = ["Python", "FastAPI", "React", "TypeScript", "SQL"]
+            prefs["required_skills"] = list(prefs["must_have_skills"])
+
+        if not prefs.get("preferred_skills"):
+            prefs["preferred_skills"] = ["Docker", "PostgreSQL", "Redis", "AWS", "Git", "REST APIs"]
+
+        # Bidirectional sync: ai_genai_focus_skills <-> ai_focus_skills
+        ai_skills = prefs.get("ai_genai_focus_skills") or prefs.get("ai_focus_skills")
+        if not ai_skills:
+            ai_skills = [
+                "LLM", "RAG", "Agentic AI", "Vector Database", "Embeddings",
+                "LangChain", "LangGraph", "Semantic Search", "MCP", "OpenAI API", "Prompt Engineering"
+            ]
+        prefs["ai_genai_focus_skills"] = list(ai_skills)
+        prefs["ai_focus_skills"] = list(ai_skills)
+
+        # Locations and remote
+        if not prefs.get("preferred_locations"):
+            prefs["preferred_locations"] = ["Remote", "Bengaluru", "Bangalore", "Hyderabad", "Pune", "Gurgaon", "Noida", "Delhi NCR", "India"]
+
+        allow_rem = (
+            prefs.get("allow_remote_opportunities")
+            if prefs.get("allow_remote_opportunities") is not None
+            else prefs.get("allow_remote", True)
+        )
+        prefs["allow_remote_opportunities"] = bool(allow_rem)
+        prefs["allow_remote"] = bool(allow_rem)
+
         if not prefs.get("remote_preference") and profile.remote_preference:
             prefs["remote_preference"] = profile.remote_preference
-        if prefs.get("min_salary") is None and profile.target_salary_min:
-            prefs["min_salary"] = profile.target_salary_min
+
+        # Experience range (Canonical: target_min_experience_years / target_max_experience_years)
+        min_exp = (
+            prefs.get("target_min_experience_years")
+            if prefs.get("target_min_experience_years") is not None
+            else prefs.get("preferred_min_years")
+            if prefs.get("preferred_min_years") is not None
+            else prefs.get("min_experience_years")
+            if prefs.get("min_experience_years") is not None
+            else prefs.get("min_years_experience")
+        )
+        if min_exp is None:
+            min_exp = 0.0
+        prefs["target_min_experience_years"] = float(min_exp)
+        prefs["preferred_min_years"] = float(min_exp)
+        prefs["min_experience_years"] = float(min_exp)
+        prefs["min_years_experience"] = float(min_exp)
+
+        max_exp = (
+            prefs.get("target_max_experience_years")
+            if prefs.get("target_max_experience_years") is not None
+            else prefs.get("preferred_max_years")
+            if prefs.get("preferred_max_years") is not None
+            else prefs.get("max_experience_years")
+            if prefs.get("max_experience_years") is not None
+            else prefs.get("max_years_experience")
+        )
+        if max_exp is None:
+            max_exp = 6.0
+        prefs["target_max_experience_years"] = float(max_exp)
+        prefs["preferred_max_years"] = float(max_exp)
+        prefs["max_experience_years"] = float(max_exp)
+        prefs["max_years_experience"] = float(max_exp)
+
+        # Compensation in INR LPA
+        pkg_lpa = (
+            prefs.get("minimum_package_lpa")
+            if prefs.get("minimum_package_lpa") is not None
+            else profile.target_package_min_lpa
+            if profile.target_package_min_lpa is not None
+            else prefs.get("min_salary_lpa")
+        )
+
+        if pkg_lpa is not None:
+            prefs["minimum_package_lpa"] = float(pkg_lpa)
+            prefs["min_salary_lpa"] = float(pkg_lpa)
+        else:
+            # Handle legacy USD values safely without corrupting INR LPA
+            old_sal = prefs.get("min_salary") or profile.target_salary_min
+            if old_sal is not None:
+                if old_sal < 200.0:
+                    prefs["minimum_package_lpa"] = float(old_sal)
+                    prefs["min_salary_lpa"] = float(old_sal)
+                else:
+                    prefs["legacy_min_salary_usd"] = float(old_sal)
+                    prefs["minimum_package_lpa"] = None
+                    prefs["min_salary_lpa"] = None
+
         return JobSearchPreferences(**prefs)
 
     @classmethod
@@ -286,17 +407,85 @@ class CandidateService:
             )
         current = dict(profile.search_preferences or {})
         updates = data.model_dump(exclude_unset=True)
-        current.update(updates)
 
-        # Sync relevant top-level fields for backwards compatibility
-        if "target_titles" in updates and updates["target_titles"] is not None:
+        # Sync target_roles and target_titles
+        if "target_roles" in updates and updates["target_roles"] is not None:
+            updates["target_titles"] = updates["target_roles"]
+            profile.target_titles = updates["target_roles"]
+        elif "target_titles" in updates and updates["target_titles"] is not None:
+            updates["target_roles"] = updates["target_titles"]
             profile.target_titles = updates["target_titles"]
+
+        # Sync must_have_skills and required_skills
+        if "must_have_skills" in updates and updates["must_have_skills"] is not None:
+            updates["required_skills"] = updates["must_have_skills"]
+        elif "required_skills" in updates and updates["required_skills"] is not None:
+            updates["must_have_skills"] = updates["required_skills"]
+
+        # Sync ai_genai_focus_skills and ai_focus_skills
+        if "ai_genai_focus_skills" in updates and updates["ai_genai_focus_skills"] is not None:
+            updates["ai_focus_skills"] = updates["ai_genai_focus_skills"]
+        elif "ai_focus_skills" in updates and updates["ai_focus_skills"] is not None:
+            updates["ai_genai_focus_skills"] = updates["ai_focus_skills"]
+
+        # Sync allow_remote_opportunities and allow_remote
+        if "allow_remote_opportunities" in updates and updates["allow_remote_opportunities"] is not None:
+            updates["allow_remote"] = updates["allow_remote_opportunities"]
+        elif "allow_remote" in updates and updates["allow_remote"] is not None:
+            updates["allow_remote_opportunities"] = updates["allow_remote"]
+
+        # Sync min experience fields (including 0.0)
+        min_exp = None
+        for key in ["target_min_experience_years", "preferred_min_years", "min_experience_years", "min_years_experience"]:
+            if key in updates and updates[key] is not None:
+                min_exp = float(updates[key])
+                break
+        if min_exp is not None:
+            updates["target_min_experience_years"] = min_exp
+            updates["preferred_min_years"] = min_exp
+            updates["min_experience_years"] = min_exp
+            updates["min_years_experience"] = min_exp
+
+        # Sync max experience fields
+        max_exp = None
+        for key in ["target_max_experience_years", "preferred_max_years", "max_experience_years", "max_years_experience"]:
+            if key in updates and updates[key] is not None:
+                max_exp = float(updates[key])
+                break
+        if max_exp is not None:
+            updates["target_max_experience_years"] = max_exp
+            updates["preferred_max_years"] = max_exp
+            updates["max_experience_years"] = max_exp
+            updates["max_years_experience"] = max_exp
+
+        # Sync package LPA
+        pkg_lpa = None
+        for key in ["minimum_package_lpa", "min_salary_lpa"]:
+            if key in updates and updates[key] is not None:
+                pkg_lpa = float(updates[key])
+                break
+        if pkg_lpa is not None:
+            updates["minimum_package_lpa"] = pkg_lpa
+            updates["min_salary_lpa"] = pkg_lpa
+            profile.target_package_min_lpa = pkg_lpa
+        elif "minimum_package_lpa" in updates and updates["minimum_package_lpa"] is None:
+            profile.target_package_min_lpa = None
+
         if "remote_preference" in updates and updates["remote_preference"] is not None:
             profile.remote_preference = updates["remote_preference"]
         if "min_salary" in updates and updates["min_salary"] is not None:
-            profile.target_salary_min = updates["min_salary"]
+            if float(updates["min_salary"]) >= 1000.0:
+                updates["legacy_min_salary_usd"] = float(updates["min_salary"])
+                profile.target_salary_min = float(updates["min_salary"])
+            else:
+                # If a small number was entered into min_salary, treat as LPA
+                updates["minimum_package_lpa"] = float(updates["min_salary"])
+                updates["min_salary_lpa"] = float(updates["min_salary"])
+                profile.target_package_min_lpa = float(updates["min_salary"])
 
+        current.update(updates)
         profile.search_preferences = current
+        flag_modified(profile, "search_preferences")
         await session.commit()
         await session.refresh(profile)
         return await cls.get_search_preferences(session)

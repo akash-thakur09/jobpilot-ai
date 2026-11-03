@@ -37,67 +37,97 @@ class GreenhouseJobAdapter(BaseJobSourceAdapter):
 
     async def fetch_jobs(
         self,
-        board_token: str = "example",
+        board_token: Optional[str] = None,
+        board_tokens: Optional[List[str]] = None,
         fixtures: Optional[List[Dict[str, Any]]] = None,
         timeout_seconds: float = 25.0,
         limit: Optional[int] = None,
         **kwargs,
     ) -> List[RawJobData]:
-        """Fetches public postings for a given Greenhouse board token."""
+        """Fetches public postings for one or more Greenhouse board tokens."""
+        # Determine tokens list
+        tokens_to_fetch: List[str] = []
+        if board_tokens and isinstance(board_tokens, list):
+            tokens_to_fetch = [t.strip() for t in board_tokens if t and str(t).strip()]
+        elif board_token:
+            if "," in board_token:
+                tokens_to_fetch = [t.strip() for t in board_token.split(",") if t.strip()]
+            else:
+                tokens_to_fetch = [board_token.strip()]
+        
+        if not tokens_to_fetch:
+            tokens_to_fetch = ["canonical"]
+
         if fixtures is not None:
             items = fixtures[:limit] if limit else fixtures
+            first_token = tokens_to_fetch[0] if tokens_to_fetch else "example"
             return [
                 RawJobData(
                     source_identifier=self.source_identifier,
                     external_id=str(item.get("id")),
-                    payload={**item, "_board_token": board_token},
+                    payload={**item, "_board_token": first_token},
                 )
                 for item in items
             ]
 
-        url = self.BASE_URL.format(board_token=board_token)
+        all_raw_jobs: List[RawJobData] = []
         params = {"content": "true"}
 
-        try:
-            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                response = await client.get(url, params=params)
-                if response.status_code == 429:
-                    retry_after_str = response.headers.get("Retry-After", "60")
-                    try:
-                        retry_sec = int(retry_after_str)
-                    except ValueError:
-                        retry_sec = 60
-                    logger.warning(f"Greenhouse rate limit (429) hit for '{board_token}'. Retry-After: {retry_sec}s")
-                    raise SourceRateLimitException(
-                        f"Greenhouse rate limit exceeded for board '{board_token}'. Retry after {retry_sec}s.",
-                        retry_after_seconds=retry_sec,
-                    )
-                if response.status_code == 404:
-                    logger.warning(f"Greenhouse board '{board_token}' not found (404).")
-                    return []
-                response.raise_for_status()
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            for token in tokens_to_fetch:
+                url = self.BASE_URL.format(board_token=token)
                 try:
-                    data = response.json()
-                except Exception as json_err:
-                    raise ValueError(f"Malformed JSON response from Greenhouse board '{board_token}': {json_err}")
+                    response = await client.get(url, params=params)
+                    if response.status_code == 429:
+                        retry_after_str = response.headers.get("Retry-After", "60")
+                        try:
+                            retry_sec = int(retry_after_str)
+                        except ValueError:
+                            retry_sec = 60
+                        logger.warning(f"Greenhouse rate limit (429) hit for '{token}'. Retry-After: {retry_sec}s")
+                        raise SourceRateLimitException(
+                            f"Greenhouse rate limit exceeded for board '{token}'. Retry after {retry_sec}s.",
+                            retry_after_seconds=retry_sec,
+                        )
+                    if response.status_code == 404:
+                        logger.warning(f"Greenhouse board '{token}' not found (404).")
+                        continue
+                    response.raise_for_status()
+                    try:
+                        data = response.json()
+                    except Exception as json_err:
+                        logger.warning(f"Malformed JSON response from Greenhouse board '{token}': {json_err}")
+                        if len(tokens_to_fetch) == 1:
+                            raise ValueError(f"Malformed JSON response from Greenhouse board '{token}': {json_err}")
+                        continue
 
-                jobs_list = data.get("jobs", [])
-                if limit and isinstance(limit, int):
-                    jobs_list = jobs_list[:limit]
+                    jobs_list = data.get("jobs", [])
+                    if limit and isinstance(limit, int):
+                        remaining_quota = limit - len(all_raw_jobs)
+                        if remaining_quota <= 0:
+                            break
+                        jobs_list = jobs_list[:remaining_quota]
 
-                return [
-                    RawJobData(
-                        source_identifier=self.source_identifier,
-                        external_id=str(job.get("id")),
-                        payload={**job, "_board_token": board_token},
-                    )
-                    for job in jobs_list
-                ]
-        except (SourceRateLimitException, ValueError):
-            raise
-        except Exception as exc:
-            logger.error(f"Error fetching from Greenhouse board '{board_token}': {exc}")
-            raise
+                    for job in jobs_list:
+                        all_raw_jobs.append(
+                            RawJobData(
+                                source_identifier=self.source_identifier,
+                                external_id=str(job.get("id")),
+                                payload={**job, "_board_token": token},
+                            )
+                        )
+
+                    if limit and len(all_raw_jobs) >= limit:
+                        break
+
+                except SourceRateLimitException:
+                    raise
+                except Exception as exc:
+                    logger.error(f"Error fetching from Greenhouse board '{token}': {exc}")
+                    if len(tokens_to_fetch) == 1:
+                        raise
+
+        return all_raw_jobs
 
     async def check_job_status(
         self,

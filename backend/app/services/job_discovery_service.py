@@ -82,10 +82,26 @@ class JobDiscoveryService:
         if update_data.is_enabled is not None:
             source.is_enabled = update_data.is_enabled
 
-        if identifier.lower() == "greenhouse" and update_data.board_token is not None:
-            current_config["board_token"] = update_data.board_token.strip()
-        elif identifier.lower() == "lever" and update_data.site_token is not None:
-            current_config["site_token"] = update_data.site_token.strip()
+        if identifier.lower() == "greenhouse":
+            if update_data.board_tokens is not None:
+                cleaned = [t.strip() for t in update_data.board_tokens if t and str(t).strip()]
+                current_config["board_tokens"] = cleaned
+                if cleaned:
+                    current_config["board_token"] = cleaned[0]
+            elif update_data.board_token is not None:
+                token_val = update_data.board_token.strip()
+                current_config["board_token"] = token_val
+                current_config["board_tokens"] = [t.strip() for t in token_val.split(",") if t.strip()]
+        elif identifier.lower() == "lever":
+            if update_data.site_tokens is not None:
+                cleaned = [t.strip() for t in update_data.site_tokens if t and str(t).strip()]
+                current_config["site_tokens"] = cleaned
+                if cleaned:
+                    current_config["site_token"] = cleaned[0]
+            elif update_data.site_token is not None:
+                token_val = update_data.site_token.strip()
+                current_config["site_token"] = token_val
+                current_config["site_tokens"] = [t.strip() for t in token_val.split(",") if t.strip()]
         elif identifier.lower() == "synthetic" and update_data.count is not None:
             current_config["count"] = update_data.count
 

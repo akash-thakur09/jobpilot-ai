@@ -40,6 +40,7 @@ from backend.app.workflow.schemas import (
 )
 from backend.app.services.application_workflow_service import ApplicationWorkflowService
 from backend.app.automation.browser_runner import BrowserAutomationRunner
+from backend.app.automation.synthetic_submission_service import SyntheticSubmissionService
 from backend.app.workflow.state_machine import ApplicationStateMachine, EventSanitizer
 from backend.app.workflow.exceptions import (
     WorkflowError,
@@ -260,26 +261,41 @@ async def execute_submission_attempt(
     if not application:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Application '{application_id}' not found.")
 
-    if application.status != ApplicationStatus.APPROVED.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot execute automation: Application status is '{application.status}', must be 'APPROVED'.",
-        )
+    is_synthetic_mode = request.is_synthetic is True or (request.target_url is None and request.is_synthetic is not False)
 
-    # 3. Execute automation runner
+    if application.status != ApplicationStatus.APPROVED.value:
+        # Allow idempotent return if already submitted in simulation
+        if is_synthetic_mode and application.status == ApplicationStatus.SUBMITTED_SIMULATION.value:
+            pass
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot execute automation: Application status is '{application.status}', must be 'APPROVED'.",
+            )
+
+    # 3. Execute runner: Isolated Synthetic Submission vs Local Playwright Runner
     try:
-        attempt = await BrowserAutomationRunner.execute_application_automation(
-            session=session,
-            application_id=application_id,
-            target_url=request.target_url,
-            actor="AUTOMATION_RUNNER",
-        )
+        if is_synthetic_mode:
+            attempt = await SyntheticSubmissionService.execute_synthetic_submission(
+                session=session,
+                application_id=application_id,
+                actor="SYNTHETIC_RUNNER",
+            )
+        else:
+            attempt = await BrowserAutomationRunner.execute_application_automation(
+                session=session,
+                application_id=application_id,
+                target_url=request.target_url,
+                actor="AUTOMATION_RUNNER",
+            )
         return SubmissionAttemptRead.model_validate(attempt)
+    except ApplicationNotFoundError as ae:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ae))
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
     except Exception as e:
-        logger.exception(f"Error during browser automation execution: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Browser automation failed.")
+        logger.exception(f"Error during submission execution: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Submission execution failed.")
 
 
 @router.get("/{application_id}/events", response_model=ApplicationEventListResponse)

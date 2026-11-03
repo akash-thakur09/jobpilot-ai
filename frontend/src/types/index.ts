@@ -9,7 +9,11 @@ export type ApplicationStatus =
   | 'NEEDS_HUMAN_ACTION'
   | 'APPROVED'
   | 'IN_PROGRESS'
+  | 'SYNTHETIC_SUBMISSION_IN_PROGRESS'
   | 'SUBMITTED'
+  | 'SUBMITTED_SIMULATION'
+  | 'SYNTHETICALLY_SUBMITTED'
+  | 'REAL_SUBMITTED'
   | 'OUTCOME_UNKNOWN'
   | 'SHORTLISTED'
   | 'INTERVIEW_SCHEDULED'
@@ -19,12 +23,15 @@ export type ApplicationStatus =
 
 export type EligibilityStatus = 'ELIGIBLE' | 'DISQUALIFIED' | 'NEEDS_REVIEW' | 'UNKNOWN';
 
+export type RelevanceClassification = 'HIGHLY_RELEVANT' | 'POTENTIALLY_RELEVANT' | 'LOW_RELEVANCE';
+
 export type SubmissionOutcome =
   | 'SUCCESS'
   | 'FAILED'
   | 'NEEDS_HUMAN_ACTION'
   | 'OUTCOME_UNKNOWN'
-  | 'BLOCKED_SAFETY';
+  | 'BLOCKED_SAFETY'
+  | 'SUBMITTED_SIMULATION';
 
 // ---------------------------------------------------------------------------
 // Candidate Profile
@@ -82,6 +89,8 @@ export interface CandidateProfile {
   years_of_experience?: number | null;
   target_titles?: string[];
   target_locations?: string[];
+  target_package_min_lpa?: number | null;
+  target_package_max_lpa?: number | null;
   min_salary?: number | null;
   target_salary?: number | null;
   remote_preference?: string | null;
@@ -99,31 +108,71 @@ export interface CandidateProfile {
 }
 
 export interface JobSearchPreferences {
-  target_titles?: string[];
+  // Canonical Phase 2 Contract
+  target_roles?: string[];
   role_keywords?: string[];
-  required_skills?: string[];
+  must_have_skills?: string[];
   preferred_skills?: string[];
-  preferred_locations?: string[];
+  ai_genai_focus_skills?: string[];
   remote_preference?: 'ANY' | 'REMOTE' | 'HYBRID' | 'ON_SITE';
-  min_years_experience?: number | null;
-  max_years_experience?: number | null;
-  min_salary?: number | null;
+  allow_remote_opportunities?: boolean;
+  target_min_experience_years?: number | null;
+  target_max_experience_years?: number | null;
+  preferred_locations?: string[];
+  minimum_package_lpa?: number | null;
   preferred_companies?: string[];
   excluded_companies?: string[];
+
+  // Aliases & Backward Compatibility
+  role_aliases?: Record<string, string[]>;
+  target_titles?: string[];
+  required_skills?: string[];
+  ai_focus_skills?: string[];
+  allow_remote?: boolean;
+  preferred_min_years?: number | null;
+  preferred_max_years?: number | null;
+  min_experience_years?: number | null;
+  max_experience_years?: number | null;
+  min_years_experience?: number | null;
+  max_years_experience?: number | null;
+  min_salary_lpa?: number | null;
+  min_salary?: number | null;
+  legacy_min_salary_usd?: number | null;
+  work_modes?: string[];
+  employment_types?: string[];
 }
 
 export interface JobSearchPreferencesUpdate {
-  target_titles?: string[];
+  target_roles?: string[];
   role_keywords?: string[];
-  required_skills?: string[];
+  must_have_skills?: string[];
   preferred_skills?: string[];
-  preferred_locations?: string[];
+  ai_genai_focus_skills?: string[];
   remote_preference?: 'ANY' | 'REMOTE' | 'HYBRID' | 'ON_SITE';
-  min_years_experience?: number | null;
-  max_years_experience?: number | null;
-  min_salary?: number | null;
+  allow_remote_opportunities?: boolean;
+  target_min_experience_years?: number | null;
+  target_max_experience_years?: number | null;
+  preferred_locations?: string[];
+  minimum_package_lpa?: number | null;
   preferred_companies?: string[];
   excluded_companies?: string[];
+
+  role_aliases?: Record<string, string[]>;
+  target_titles?: string[];
+  required_skills?: string[];
+  ai_focus_skills?: string[];
+  allow_remote?: boolean;
+  preferred_min_years?: number | null;
+  preferred_max_years?: number | null;
+  min_experience_years?: number | null;
+  max_experience_years?: number | null;
+  min_years_experience?: number | null;
+  max_years_experience?: number | null;
+  min_salary_lpa?: number | null;
+  min_salary?: number | null;
+  legacy_min_salary_usd?: number | null;
+  work_modes?: string[];
+  employment_types?: string[];
 }
 
 export interface CandidateProfileUpdate {
@@ -136,6 +185,8 @@ export interface CandidateProfileUpdate {
   years_of_experience?: number | null;
   target_titles?: string[];
   target_locations?: string[];
+  target_package_min_lpa?: number | null;
+  target_package_max_lpa?: number | null;
   min_salary?: number | null;
   target_salary?: number | null;
   remote_preference?: string | null;
@@ -177,6 +228,34 @@ export interface JobRequirement {
   weight: number;
 }
 
+export interface JobRelevanceMetadata {
+  relevance_score: number;
+  relevance_classification: RelevanceClassification;
+  matched_roles?: string[];
+  matched_skills?: string[];
+  missing_priority_skills?: string[];
+  reasons?: string[];
+  component_scores?: {
+    title_score?: number;
+    skills_score?: number;
+    location_score?: number;
+    work_mode_and_exp_score?: number;
+    penalty?: number;
+    [key: string]: any;
+  };
+}
+
+export interface JobRelevanceRead {
+  job_id: string;
+  relevance_score: number;
+  relevance_classification: RelevanceClassification;
+  matched_roles: string[];
+  matched_skills: string[];
+  missing_priority_skills: string[];
+  reasons: string[];
+  component_scores: Record<string, number>;
+}
+
 export interface Job {
   id: string;
   source_id: string;
@@ -190,6 +269,9 @@ export interface Job {
   salary_min?: number | null;
   salary_max?: number | null;
   salary_currency?: string | null;
+  relevance_score?: number | null;
+  relevance_classification?: RelevanceClassification | null;
+  relevance_metadata?: JobRelevanceMetadata | null;
   discovered_at: string;
   posted_at?: string | null;
   first_seen_at?: string | null;
@@ -289,11 +371,17 @@ export interface JobSource {
   last_status?: string | null;
   last_error_summary?: string | null;
   jobs_discovered_count?: number;
+  jobs_relevant_count?: number;
+  config_json?: Record<string, any>;
 }
 
 export interface JobSourceConfigUpdate {
   is_enabled?: boolean;
   board_token?: string;
+  board_tokens?: string[];
+  site_token?: string;
+  site_tokens?: string[];
+  count?: number;
 }
 
 export interface JobDiscoveryResponse {

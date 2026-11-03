@@ -46,6 +46,7 @@ import {
   JobFeedback,
   FeedbackType,
   RankingEvaluationSummary,
+  JobRelevanceRead,
 } from '../types';
 
 export class ApiError extends Error {
@@ -194,6 +195,9 @@ export const api = {
       company?: string;
       remote_type?: string;
       search?: string;
+      relevance_classification?: string;
+      min_relevance_score?: number;
+      include_synthetic?: boolean;
       limit?: number;
       offset?: number;
     } = {}) => {
@@ -201,12 +205,24 @@ export const api = {
       if (params.company) query.set('company', params.company);
       if (params.remote_type) query.set('remote_type', params.remote_type);
       if (params.search) query.set('search', params.search);
+      if (params.relevance_classification) query.set('relevance_classification', params.relevance_classification);
+      if (params.min_relevance_score !== undefined) query.set('min_relevance_score', params.min_relevance_score.toString());
+      if (params.include_synthetic !== undefined) query.set('include_synthetic', params.include_synthetic.toString());
       if (params.limit !== undefined) query.set('limit', params.limit.toString());
       if (params.offset !== undefined) query.set('offset', params.offset.toString());
       const qs = query.toString();
       return request<JobListResponse>(`/api/v1/jobs${qs ? `?${qs}` : ''}`);
     },
     get: (jobId: string) => request<Job>(`/api/v1/jobs/${jobId}`),
+    getRelevance: (jobId: string) => request<JobRelevanceRead>(`/api/v1/jobs/${jobId}/relevance`),
+    reEvaluateRelevance: () =>
+      request<{
+        total_evaluated: number;
+        highly_relevant_count: number;
+        potentially_relevant_count: number;
+        low_relevance_count: number;
+        status: string;
+      }>('/api/v1/jobs/re-evaluate-relevance', { method: 'POST' }),
     listSources: () => request<JobSource[]>('/api/v1/jobs/sources'),
     getSource: (identifier: string) =>
       request<JobSource>(`/api/v1/jobs/sources/${identifier}`),
@@ -217,7 +233,13 @@ export const api = {
       }),
     discover: (
       sourceIdentifier: string,
-      params: { board_token?: string; site_token?: string; count?: number } = {}
+      params: {
+        board_token?: string;
+        board_tokens?: string[];
+        site_token?: string;
+        site_tokens?: string[];
+        count?: number;
+      } = {}
     ) =>
       request<JobDiscoveryResponse>('/api/v1/jobs/discover', {
         method: 'POST',

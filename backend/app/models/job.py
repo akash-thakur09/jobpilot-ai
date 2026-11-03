@@ -11,6 +11,7 @@ from backend.app.models.enums import (
     FreshnessStatus,
     DuplicateConfidence,
     ClusterStatus,
+    RelevanceClassification,
 )
 
 
@@ -52,6 +53,7 @@ class JobSource(Base, TimestampMixin):
     last_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     last_error_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     jobs_discovered_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    jobs_relevant_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     jobs: Mapped[List["Job"]] = relationship("Job", back_populates="source", cascade="all, delete-orphan")
 
@@ -81,6 +83,13 @@ class Job(Base, TimestampMixin):
     )
 
     raw_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    # Early Relevance Filtering
+    relevance_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True, index=True)
+    relevance_classification: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, index=True, default=RelevanceClassification.LOW_RELEVANCE.value
+    )
+    relevance_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Freshness & lifecycle
     posted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
